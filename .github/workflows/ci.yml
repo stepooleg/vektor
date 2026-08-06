@@ -66,8 +66,6 @@ jobs:
     name: 🐍 Backend (pytest, ruff, mypy)
     runs-on: ubuntu-latest
     needs: repo-checks
-    # Запускать только когда в PR/push затронут backend
-    if: false  # ← перевести в 'true' (или убрать) после заведения backend/pyproject.toml
     defaults:
       run:
         working-directory: backend
@@ -122,7 +120,7 @@ jobs:
       - name: pytest
         run: pytest -ra --cov=vektor --cov-report=term-missing --cov-report=xml
         env:
-          DJANGO_SETTINGS_MODULE: vektor.settings_test
+          DJANGO_SETTINGS_MODULE: vektor.settings.test
           DATABASE_URL: postgres://vektor:vektor@localhost:5432/vektor
           REDIS_URL: redis://localhost:6379/0
           SECRET_KEY: ci-secret-key-not-for-prod
@@ -142,7 +140,6 @@ jobs:
     name: ⚛️ Frontend (vitest, eslint, typecheck, build)
     runs-on: ubuntu-latest
     needs: repo-checks
-    if: false  # ← перевести в 'true' после заведения frontend/package.json
     defaults:
       run:
         working-directory: frontend
