@@ -178,6 +178,19 @@ AUTH_USER_MODEL: str = "users.User"
 #   расширяемой абстракцией, локальный пароль — запасной механизм.
 AUTH_LDAP_ENABLED: bool = _env_bool("AUTH_LDAP_ENABLED", default=False)
 
+# Защита от перебора паролей (SPEC §10.2): lockout после N неудачных попыток.
+LOGIN_MAX_ATTEMPTS: int = int(os.environ.get("LOGIN_MAX_ATTEMPTS", "5"))
+# Окно lockout в секундах (после истечения — новая попытка разрешена).
+LOGIN_LOCKOUT_SECONDS: int = int(os.environ.get("LOGIN_LOCKOUT_SECONDS", "900"))
+
+# Кеш для счётчиков неудачных входов (fallback на local-memory, prod — Redis).
+CACHES = {
+    "default": {
+        "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+        "LOCATION": "vektor-default",
+    }
+}
+
 # ---------------------------------------------------------------------------
 # Internationalisation — только русский (SPEC §15)
 # ---------------------------------------------------------------------------

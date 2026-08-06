@@ -7,6 +7,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterator
 from typing import TYPE_CHECKING
 
 import pytest
@@ -34,3 +35,13 @@ def rf_request() -> Request:
 
     factory = APIRequestFactory()
     return factory.get("/")
+
+
+@pytest.fixture(autouse=True)
+def _flush_cache() -> Iterator[None]:
+    """Очищать кеш между тестами (изоляция счётчиков lockout и т.п.)."""
+    from django.core.cache import cache
+
+    cache.clear()
+    yield
+    cache.clear()

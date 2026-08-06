@@ -27,6 +27,7 @@ urlpatterns = [
     path("admin/", admin.site.urls),
     # API v1.
     path(f"{API_PREFIX}/health/", HealthView.as_view(), name="api-health"),
+    path(f"{API_PREFIX}/auth/", include("apps.users.urls")),
     path(f"{API_PREFIX}/competencies/", include("apps.competencies.urls")),
     path(f"{API_PREFIX}/schema/", SpectacularAPIView.as_view(), name="api-schema"),
     path(
