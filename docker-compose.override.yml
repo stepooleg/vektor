@@ -1,0 +1,46 @@
+# =============================================================================
+# Vektor — dev-override (применяется автоматически при `docker compose up`).
+# Перекрывает прод-настройки для локальной разработки:
+# - backend: Django runserver с авто-reload, порты наружу;
+# - frontend: Vite dev server с HMR, порты наружу;
+# - db: порт наружу для прямого подключения инструментов.
+# =============================================================================
+services:
+  db:
+    ports:
+      - "${POSTGRES_PORT_HOST:-5432}:5432"
+
+  redis:
+    ports:
+      - "${REDIS_PORT_HOST:-6379}:6379"
+
+  backend:
+    # В dev — авто-reload через runserver; код монтируется томом (HMR для BE).
+    command: >
+      sh -c "python manage.py migrate &&
+             python manage.py runserver 0.0.0.0:8000"
+    volumes:
+      - ./backend:/app
+    environment:
+      DEBUG: "True"
+    ports:
+      - "${BACKEND_PORT_HOST:-8000}:8000"
+
+  frontend:
+    # Vite dev server с HMR; override прод-target на builder-фазу через command.
+    build:
+      target: builder
+    command: ["npm", "run", "dev", "--", "--host", "0.0.0.0"]
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    environment:
+      VITE_API_PROXY: http://backend:8000
+    ports:
+      - "${FRONTEND_PORT_HOST:-5173}:5173"
+
+  nginx:
+    # В dev Nginx опционален (можно ходить напрямую на порты выше);
+    # оставляем для проверки routing-конфигурации.
+    ports:
+      - "${NGINX_PORT:-8080}:80"
