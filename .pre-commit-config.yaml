@@ -1,0 +1,66 @@
+# =============================================================================
+# Vektor — pre-commit hooks (AGENTS.md §3, §6.2).
+# Установка: pip install pre-commit && pre-commit install
+# Запуск на всём: pre-commit run --all-files
+# =============================================================================
+repos:
+  # --- Базовые корректные хуки ---
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: end-of-file-fixer
+      - id: trailing-whitespace
+      - id: check-yaml
+        args: [--allow-multiple-documents]
+      - id: check-toml
+      - id: check-json
+        # tsconfig*.json — это JSONC (с комментариями), валидный для TS;
+        # строгий JSON-парсер его не примет, поэтому исключаем.
+        exclude: tsconfig.*\.json$
+      - id: check-merge-conflict
+      - id: check-added-large-files
+        args: [--maxkb=1024]
+      - id: mixed-line-ending
+        args: [--fix=lf]
+      - id: detect-private-key
+
+  # --- Backend: ruff (lint + format), AGENTS.md §7.1 ---
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.6.9
+    hooks:
+      - id: ruff
+        args: [--fix, --exit-non-zero-on-fix]
+        files: ^backend/
+      - id: ruff-format
+        files: ^backend/
+
+  # --- Backend: mypy (постепенный строгий режим), AGENTS.md §7.1 ---
+  # Локальный хук на проектном venv: mypy с плагином Django требует полного
+  # окружения проекта (vektor, django, drf), что недоступно в изолированном
+  # окружении mirrors-mypy. Запускайте через `uv run` (см. backend/README.md).
+  - repo: local
+    hooks:
+      - id: mypy
+        name: mypy (backend)
+        entry: bash -c 'cd backend && uv run mypy .'
+        language: system
+        files: ^backend/.*\.py$
+        pass_filenames: false
+
+  # --- Frontend: ESLint + Prettier, AGENTS.md §7.2 ---
+  # Локальные хуки на npm-скриптах — используют проектные версии eslint/prettier
+  # (см. frontend/package.json, .eslintrc.cjs). Запускаются из каталога frontend.
+  - repo: local
+    hooks:
+      - id: eslint
+        name: ESLint (frontend)
+        entry: bash -c 'cd frontend && npx --no-install eslint .'
+        language: system
+        files: ^frontend/.*\.(ts|tsx|js|jsx)$
+        pass_filenames: false
+      - id: prettier
+        name: Prettier (frontend)
+        entry: bash -c 'cd frontend && npx --no-install prettier --check .'
+        language: system
+        files: ^frontend/.*\.(ts|tsx|js|jsx|json|css|md|yml|yaml)$
+        pass_filenames: false

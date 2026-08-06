@@ -1,0 +1,169 @@
+# =============================================================================
+# Vektor — backend (Django 5 + DRF)
+# Стек зафиксирован в SPEC §11.1 и ADR-0002. Отклонения — только через ADR.
+# =============================================================================
+
+[build-system]
+requires = ["hatchling>=1.25"]
+build-backend = "hatchling.build"
+
+[project]
+name = "vektor"
+version = "0.1.0"
+description = "Vektor — корпоративное HR-приложение (оценка 360°, LMS, ИПР, портфолио)."
+readme = "README.md"
+requires-python = ">=3.12,<3.13"
+license = { text = "TBD" }
+authors = [{ name = "Vektor team" }]
+keywords = ["hr", "assessment", "360", "lms", "idp", "django"]
+
+# --- Зависимости уровня приложения (SPEC §11.1) -----------------------------
+dependencies = [
+    # Django 5.2 LTS + DRF
+    "Django==5.2.9",
+    "djangorestframework>=3.16,<3.17",
+    "django-cors-headers>=4.4,<5",
+    # API-документация
+    "drf-spectacular>=0.28,<0.30",
+    # БД (PostgreSQL 16) — psycopg v3 (modern)
+    "psycopg[binary]>=3.2,<4",
+    "dj-database-url>=2.2,<3",
+    # Конфигурация
+    "python-dotenv>=1.0,<2",
+    # Безопасность: хеширование паролей (SPEC §12.2 — Argon2)
+    "argon2-cffi>=23.1,<25",
+    # Очереди/фон (Celery + Redis)
+    "celery[redis]>=5.4,<6",
+    "redis>=5.0,<6",
+    # WSGI-сервер
+    "gunicorn>=23.0,<24",
+]
+
+[project.optional-dependencies]
+dev = [
+    # Тесты (AGENTS.md §3)
+    "pytest>=8.3,<9",
+    "pytest-django>=4.9,<5",
+    "pytest-cov>=5.0,<6",
+    "factory-boy>=3.3,<4",
+    # Качество кода (AGENTS.md §7.1)
+    "ruff>=0.6,<0.7",
+    "mypy>=1.11,<2",
+    "django-stubs[compatible-mypy]>=5.0,<6",
+    "djangorestframework-stubs>=3.15,<4",
+    # Утилиты
+    "ipython>=8.27,<9",
+]
+
+[project.urls]
+Homepage = "https://github.com/stepooleg/vektor"
+Repository = "https://github.com/stepooleg/vektor"
+
+# --- Hatchling: проект живёт в backend/, но пакеты — в backend/vektor и apps -
+[tool.hatch.build.targets.wheel]
+packages = ["vektor"]
+
+# =============================================================================
+# ruff (AGENTS.md §7.1) — импорт/стиль + форматирование
+# =============================================================================
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+extend-exclude = ["migrations", "build", "dist", ".venv"]
+
+[tool.ruff.lint]
+# Включаем разумные группы правил для читаемого, безопасного кода.
+select = [
+    "E", "W",   # pycodestyle
+    "F",        # pyflakes
+    "I",        # isort
+    "B",        # bugbear
+    "C4",       # comprehensions
+    "UP",       # pyupgrade
+    "SIM",      # simplify
+    "DJ",       # django
+    "PL",       # pylint subset
+    "RUF",      # ruff-specific
+]
+ignore = [
+    "E501",     # длину строк проверяет форматтер
+    "B008",     # Django-модели/декораторы с вызовами в дефолтах — норма
+    "DJ001",    # null=True у CharField иногда нужен (исторические данные)
+    "PLR2004",  # «магические числа» в тестах/моделях допустимы
+    # Кириллица в комментариях/докстрингах — норма: проект русскоязычный
+    # (SPEC §15 — язык интерфейса русский, AGENTS.md §6.2 — коммиты на русском).
+    "RUF001",   # ambiguous unicode in docstring (кириллические буквы)
+    "RUF002",   # ambiguous unicode in docstring (кириллические буквы)
+    "RUF003",   # ambiguous unicode in comment (кириллические буквы)
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["PLR2004", "S101"]          # assert и магические числа в тестах ок
+"**/migrations/**" = ["E", "W", "F401"]   # миграции генерируются автоматически
+# Settings-модули используют `from .base import *` — стандартный паттерн Django.
+"**/settings/*.py" = ["F403", "F405"]
+# DRF-классы переопределяют атрибуты базового класса (permission_classes и др.)
+# как instance vars; ClassVar здесь конфликтует с mypy — игнорируем RUF012.
+"**/views.py" = ["RUF012"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["vektor"]
+
+# =============================================================================
+# mypy (AGENTS.md §7.1) — постепенный строгий режим + плагин Django
+# =============================================================================
+[tool.mypy]
+python_version = "3.12"
+plugins = ["mypy_django_plugin.main", "mypy_drf_plugin.main"]
+strict = true
+warn_unused_ignores = true
+warn_redundant_casts = true
+warn_return_any = true
+no_implicit_optional = true
+show_error_codes = true
+files = ["vektor", "apps", "tests"]
+
+# Сгенерированные файлы не типизируем.
+[[tool.mypy.overrides]]
+module = ["*.migrations.*", "manage.py"]
+ignore_errors = true
+
+# Сторонние библиотеки без py.typed / стабов — не блокируют проверки.
+[[tool.mypy.overrides]]
+module = ["celery.*", "dj_database_url", "dotenv"]
+ignore_missing_imports = true
+
+# Строки конфигурации для плагина django-stubs.
+[tool.django-stubs]
+django_settings_module = "vektor.settings.test"
+
+# =============================================================================
+# pytest (AGENTS.md §3)
+# =============================================================================
+[tool.pytest.ini_options]
+minversion = "8.3"
+DJANGO_SETTINGS_MODULE = "vektor.settings.test"
+python_files = ["test_*.py", "*_test.py"]
+pythonpath = ["."]
+addopts = [
+    "-ra",
+    "--strict-markers",
+    "--strict-config",
+    "--cov=vektor",
+    "--cov=apps",
+    "--cov-report=term-missing",
+]
+testpaths = ["tests"]
+
+[tool.coverage.run]
+branch = true
+source = ["vektor", "apps"]
+omit = ["*/migrations/*", "*/tests/*", "*/test_*.py"]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "raise NotImplementedError",
+    "if TYPE_CHECKING:",
+    "if __name__ == .__main__.:",
+]

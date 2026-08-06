@@ -1,0 +1,72 @@
+/* ==========================================================================
+   Vektor — глобальные стили
+   BRANDBOOK §4 (типографика), §8 (темизация). Запрет хардкод-HEX — только токены.
+   ========================================================================== */
+
+/* Самохостинг шрифта Ubuntu (on-premise закрытый контур, BRANDBOOK §4.2) */
+@import "@fontsource/ubuntu/400.css";
+@import "@fontsource/ubuntu/500.css";
+@import "@fontsource/ubuntu/700.css";
+
+/* Единый источник токенов */
+@import "./tokens.css";
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background-color: var(--bg-base);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  line-height: 1.5;
+  /* Плавная смена темы (BRANDBOOK §7.4 — 200ms ease-standard). */
+  transition:
+    background-color 200ms var(--ease-standard),
+    color 200ms var(--ease-standard);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Числовой шрифт в метриках/таблицах (BRANDBOOK §4.4 — tabular-nums). */
+table,
+.numeric {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Фокус-стили доступны в обеих темах (BRANDBOOK §6.4, accessibility). */
+:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+/* ----- Layout-хелперы ----- */
+.vektor-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-inline: 24px;
+  background-color: var(--bg-surface) !important;
+  border-bottom: 1px solid var(--border);
+  box-shadow: var(--elevation-1);
+}
+
+.vektor-content {
+  padding: 24px;
+  background-color: var(--bg-base);
+}
+
+/* Боковое меню: прозрачный фон, акцент активного пункта — Primary (BRANDBOOK §6.7). */
+.vektor-header ~ * .ant-menu-item-selected {
+  color: var(--color-primary);
+}

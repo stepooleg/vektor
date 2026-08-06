@@ -29,19 +29,44 @@
 
 ## 🚀 Быстрый старт
 
-> Подробности появятся по мере реализации. Базовый сценарий:
-
 ```bash
 # Клонирование
 git clone git@github.com:stepooleg/vektor.git
 cd vektor
 cp .env.example .env            # заполнить значения
 
-# Полное окружение через Docker
-docker compose up --build
+# Полное окружение через Docker (см. docs/deployment/dev-setup.md)
+bash scripts/docker/bootstrap.sh
+docker compose up
+# → frontend:  http://localhost:8080  (или :5173 напрямую в dev)
+# → backend:   http://localhost:8000/api/v1/docs/  (Swagger)
+# → health:    http://localhost:8000/api/v1/health/
 ```
 
-Локальная разработка по слоям — см. [`AGENTS.md`](./AGENTS.md) §12.
+### Локальная разработка по слоям
+
+```bash
+# Backend (Python 3.12 + uv)
+cd backend && uv venv --python 3.12 .venv && uv pip install -e ".[dev]"
+uv run python manage.py migrate && uv run python manage.py runserver
+
+# Frontend (Node 20+)
+cd frontend && npm ci && npm run dev
+```
+
+Команды тестов/качества — в [`AGENTS.md`](./AGENTS.md) §12 и `backend/README.md`,
+`frontend/README.md`.
+
+### pre-commit хуки
+
+```bash
+pip install pre-commit
+pre-commit install           # хук на каждый коммит
+pre-commit run --all-files   # прогон на всём репозитории
+```
+
+Хуки: ruff (lint+format), mypy (backend), ESLint+Prettier (frontend),
+проверки JSON/YAML/TOML, защита секретов. Подробнее: [`.pre-commit-config.yaml`](./.pre-commit-config.yaml).
 
 ---
 
