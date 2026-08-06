@@ -170,6 +170,9 @@ AUTH_PASSWORD_VALIDATORS: list[dict[str, Any]] = [
 LOGIN_URL: str = "/auth/login/"
 LOGIN_REDIRECT_URL: str = "/"
 
+# Кастомная модель пользователя (SPEC §10.2, §2). Домен apps.users.
+AUTH_USER_MODEL: str = "users.User"
+
 # TODO(#6): SSO (SAML/OIDC/LDAP) — уточняется с администратором (SPEC §17 п.2).
 #   Реализовать плагин аутентификации (django-auth-ldap / django-saml2) с
 #   расширяемой абстракцией, локальный пароль — запасной механизм.

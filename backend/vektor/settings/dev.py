@@ -14,6 +14,17 @@ from .base import *  # стандартный паттерн Django-settings
 # DEBUG из env, по умолчанию True для dev.
 DEBUG = True
 
+# Локальная разработка: по умолчанию SQLite, чтобы manage.py-команды работали
+# без Docker/PostgreSQL. В Docker .env задаёт DATABASE_URL → PostgreSQL 16.
+# (Это не влияет на CI/тесты — там test.py со своим in-memory SQLite.)
+if not os.environ.get("DATABASE_URL"):
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.sqlite3",
+            "NAME": BASE_DIR / "db.sqlite3",
+        }
+    }
+
 # В dev расширяем допустимые хосты явно (прод-список см. в base.py).
 ALLOWED_HOSTS = ["localhost", "127.0.0.1", "0.0.0.0"]
 
