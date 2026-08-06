@@ -107,6 +107,8 @@ ignore = [
 "**/views.py" = ["RUF012"]
 # Модели Django: внутри class Meta ClassVar неприменим; RUF012 даёт ложные срабатывания.
 "**/models.py" = ["RUF012"]
+# Сериалайзеры DRF: class Meta — тот же паттерн; ClassVar неприменим.
+"**/serializers.py" = ["RUF012"]
 
 [tool.ruff.lint.isort]
 known-first-party = ["vektor"]

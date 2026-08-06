@@ -11,7 +11,7 @@ URL-префикс версии (``v1``) берётся из ``vektor.API_VERSIO
 from __future__ import annotations
 
 from django.contrib import admin
-from django.urls import path
+from django.urls import include, path
 from drf_spectacular.views import (
     SpectacularAPIView,
     SpectacularSwaggerView,
@@ -27,6 +27,7 @@ urlpatterns = [
     path("admin/", admin.site.urls),
     # API v1.
     path(f"{API_PREFIX}/health/", HealthView.as_view(), name="api-health"),
+    path(f"{API_PREFIX}/competencies/", include("apps.competencies.urls")),
     path(f"{API_PREFIX}/schema/", SpectacularAPIView.as_view(), name="api-schema"),
     path(
         f"{API_PREFIX}/docs/",
