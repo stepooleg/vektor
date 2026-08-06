@@ -1,0 +1,22 @@
+# Backend-specific артефакты (дополнение к корневому .gitignore)
+
+# База данных SQLite (локальная разработка)
+*.sqlite3
+db.sqlite3-journal
+
+# Покрытие
+coverage.xml
+.coverage
+
+# Скомпилированные расширения
+*.pyc
+*~
+
+# mypy / ruff кеш
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+
+# Собранные статики
+staticfiles/
+media/
