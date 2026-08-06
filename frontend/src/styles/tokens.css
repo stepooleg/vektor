@@ -1,0 +1,118 @@
+/* ==========================================================================
+   Vektor — Дизайн-токены
+   Единый источник правды для визуальных стилей (BRANDBOOK.md §8.2).
+   Компоненты НИКОГДА не используют хардкод-HEX — только эти переменные.
+   ========================================================================== */
+
+:root {
+  /* ----- Primary (спокойный инди) ----- */
+  --color-primary: #3B5BDB;
+  --color-primary-hover: #2F49B8;
+  --color-primary-pressed: #27408F;
+
+  /* ----- Accent (мятный рост) ----- */
+  --color-accent: #12B886;
+  --color-accent-hover: #0CA678;
+  --color-accent-pressed: #099268;
+
+  /* ----- Семантические цвета ----- */
+  --color-success: #12B886;
+  --color-warning: #F59F00;
+  --color-error: #E03131;
+  --color-info: #3B5BDB;
+
+  /* ----- Нейтральная шкала (светлая тема) ----- */
+  --bg-base: #F8F9FB;
+  --bg-surface: #FFFFFF;
+  --bg-subtle: #F1F3F5;
+  --border: #E3E6EB;
+  --border-strong: #CED4DA;
+  --text-primary: #1A1D23;
+  --text-secondary: #495057;
+  --text-muted: #868E96;
+
+  /* ----- Elevation (тени) ----- */
+  --elevation-1: 0 1px 2px rgba(15, 17, 21, 0.04), 0 1px 3px rgba(15, 17, 21, 0.06);
+  --elevation-2: 0 4px 12px rgba(15, 17, 21, 0.08);
+  --elevation-3: 0 12px 32px rgba(15, 17, 21, 0.16);
+
+  /* ----- Motion (длительности) ----- */
+  --duration-instant: 100ms;
+  --duration-quick: 150ms;
+  --duration-standard: 220ms;
+  --duration-moderate: 300ms;
+  --duration-slow: 450ms;
+
+  /* ----- Motion (easing) ----- */
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --ease-emphasized: cubic-bezier(0.3, 0, 0, 1);
+  --ease-in: cubic-bezier(0.4, 0, 1, 1);
+  --ease-out: cubic-bezier(0, 0, 0.2, 1);
+
+  /* ----- Типографика ----- */
+  --font-sans: 'Ubuntu', 'Roboto', system-ui, -apple-system, 'Segoe UI', sans-serif;
+
+  /* ----- Скругления ----- */
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-pill: 999px;
+
+  /* ----- Цвета данных (графики/дашборды, BRANDBOOK §3.4) ----- */
+  --chart-primary: #3B5BDB;
+  --chart-accent: #12B886;
+  --chart-indigo: #4C6EF5;
+  --chart-violet: #7950F2;
+  --chart-cyan: #15AABF;
+  --chart-amber: #F59F00;
+}
+
+/* ==========================================================================
+   Тёмная тема (BRANDBOOK §8.2) — равноправна со светлой
+   ========================================================================== */
+[data-theme='dark'] {
+  --color-primary: #5C7CFA;
+  --color-primary-hover: #4C6DF6;
+  --color-primary-pressed: #3B5BDB;
+
+  --color-accent: #20C997;
+  --color-accent-hover: #12B886;
+  --color-accent-pressed: #0CA678;
+
+  --color-success: #20C997;
+  --color-warning: #FAB005;
+  --color-error: #FA5252;
+  --color-info: #5C7CFA;
+
+  --bg-base: #0F1115;
+  --bg-surface: #16191F;
+  --bg-subtle: #1E222A;
+  --border: #2A2F38;
+  --border-strong: #3A4150;
+  --text-primary: #F1F3F5;
+  --text-secondary: #ADB5BD;
+  --text-muted: #6B7280;
+
+  --elevation-1: 0 1px 2px rgba(0, 0, 0, 0.30), 0 1px 3px rgba(0, 0, 0, 0.40);
+  --elevation-2: 0 4px 12px rgba(0, 0, 0, 0.45);
+  --elevation-3: 0 12px 32px rgba(0, 0, 0, 0.60);
+
+  --chart-primary: #5C7CFA;
+  --chart-accent: #20C997;
+  --chart-indigo: #4C6DF6;
+  --chart-violet: #7950F2;
+  --chart-cyan: #15AABF;
+  --chart-amber: #FAB005;
+}
+
+/* ----- Базовые правила доступности анимации (BRANDBOOK §7.5) ----- */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

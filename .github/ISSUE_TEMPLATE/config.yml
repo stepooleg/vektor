@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 📖 Спецификация (SPEC.md)
+    url: https://github.com/stepooleg/vektor/blob/main/SPEC.md
+    about: Требования к продукту — источник правды для функциональности.
+  - name: 🎨 Брендбук (BRANDBOOK.md)
+    url: https://github.com/stepooleg/vektor/blob/main/BRANDBOOK.md
+    about: Цвета, токены, типографика, компоненты — для UI-задач.
+  - name: 🤖 Правила работы (AGENTS.md)
+    url: https://github.com/stepooleg/vektor/blob/main/AGENTS.md
+    about: Test-First, кодстайл, безопасность, Definition of Done.

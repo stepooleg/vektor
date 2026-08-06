@@ -1,0 +1,44 @@
+root = true
+
+# ===== Общие правила =====
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+indent_style = space
+indent_size = 2
+
+# ===== Python (backend) =====
+[*.py]
+indent_size = 4
+max_line_length = 100
+
+# ===== Django / Jinja шаблоны =====
+[*.{html,djhtml,j2,jinja}]
+indent_size = 2
+
+# ===== Frontend (JS/TS/JSX/TSX/CSS/SCSS) =====
+[*.{js,jsx,ts,tsx,cjs,mjs,cts,mts,css,scss,sass,less,vue,astro}]
+indent_size = 2
+
+# ===== JSON / YAML / TOML =====
+[*.{json,yml,yaml,toml}]
+indent_size = 2
+
+# ===== Markdown — сохраняем хвостовые пробелы (двойной пробел = перенос строки) =====
+[*.md]
+trim_trailing_whitespace = false
+max_line_length = off
+
+# ===== Makefile (табы обязательны) =====
+[Makefile]
+indent_style = tab
+
+# ===== Shell =====
+[*.sh]
+indent_size = 2
+
+# ===== Dockerfile =====
+[Dockerfile*]
+indent_size = 4

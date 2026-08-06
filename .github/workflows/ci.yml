@@ -1,0 +1,176 @@
+# =============================================================================
+# Vektor — CI
+# Запускается на push в любую ветку и на PR в main.
+#-job'ы: quality (доки/секреты) + backend + frontend (по мере появления кода).
+# См. AGENTS.md §3 (Test-First) и §10 (Definition of Done).
+# =============================================================================
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+# Отменять устаревшие прогоны той же ветки/PR
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ----------------------------------------------------------------rechkcyc-----
+  # Базовые проверки репозитория — работают сразу, без кода.
+  # ---------------------------------------------------------------------------
+  repo-checks:
+    name: 📋 Repo checks (docs, secrets, editorconfig)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Установить Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Проверить.editorconfig
+        uses: editorconfig-checker/action-editorconfig-checker@v2
+        with:
+          version: 3.2.0
+
+      - name: Скан секретов (gitleaks)
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITLEAKS_ENABLE_COMMENTS: true
+
+      - name: Markdown lint
+        run: |
+          npm install -g markdownlint-cli2
+          markdownlint-cli2 "**/*.md" "#node_modules" "#.github/**"
+
+      - name: Проверить, что ключевые документы на месте
+        run: |
+          for f in AGENTS.md README.md SPEC.md BRANDBOOK.md .gitignore .editorconfig .env.example; do
+            if [ ! -f "$f" ]; then
+              echo "❌ Отсутствует обязательный файл: $f"
+              exit 1
+            fi
+          done
+          echo "✅ Все ключевые файлы на месте"
+
+  # ---------------------------------------------------------------------------
+  # Backend (Django + DRF). Активируется после появления backend/pyproject.toml.
+  # pytest (Test-First) + ruff + mypy.
+  # ---------------------------------------------------------------------------
+  backend:
+    name: 🐍 Backend (pytest, ruff, mypy)
+    runs-on: ubuntu-latest
+    needs: repo-checks
+    # Запускать только когда в PR/push затронут backend
+    if: false  # ← перевести в 'true' (или убрать) после заведения backend/pyproject.toml
+    defaults:
+      run:
+        working-directory: backend
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: vektor
+          POSTGRES_PASSWORD: vektor
+          POSTGRES_DB: vektor
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U vektor"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      redis:
+        image: redis:7
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Установить Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: backend/pyproject.toml
+
+      - name: Установить зависимости
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+
+      - name: ruff (lint)
+        run: ruff check .
+
+      - name: ruff format --check
+        run: ruff format --check .
+
+      - name: mypy
+        run: mypy .
+
+      - name: pytest
+        run: pytest -ra --cov=vektor --cov-report=term-missing --cov-report=xml
+        env:
+          DJANGO_SETTINGS_MODULE: vektor.settings_test
+          DATABASE_URL: postgres://vektor:vektor@localhost:5432/vektor
+          REDIS_URL: redis://localhost:6379/0
+          SECRET_KEY: ci-secret-key-not-for-prod
+
+      - name: Загрузить отчёт покрытия
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-coverage
+          path: backend/coverage.xml
+
+  # ---------------------------------------------------------------------------
+  # Frontend (React + TS + Vite). Активируется после появления frontend/package.json.
+  # Vitest (Test-First) + ESLint + Prettier + typecheck + сборка.
+  # ---------------------------------------------------------------------------
+  frontend:
+    name: ⚛️ Frontend (vitest, eslint, typecheck, build)
+    runs-on: ubuntu-latest
+    needs: repo-checks
+    if: false  # ← перевести в 'true' после заведения frontend/package.json
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Установить Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: npm ci
+        run: npm ci
+
+      - name: ESLint
+        run: npm run lint --if-present
+
+      - name: Prettier check
+        run: npm run format:check --if-present
+
+      - name: Typecheck (tsc)
+        run: npm run typecheck --if-present
+
+      - name: Vitest (unit)
+        run: npm test -- --run
+
+      - name: Сборка (Vite)
+        run: npm run build --if-present

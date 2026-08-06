@@ -1,0 +1,132 @@
+# ===== Секреты и окружение (НИКОГДА не коммитить) =====
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+*.crt
+secrets/
+secret/
+
+# ===== Python / Backend =====
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Виртуальные окружения
+.venv/
+venv/
+env/
+ENV/
+.python-version
+
+# pytest / coverage
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.nox/
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+
+# mypy / ruff
+.mypy_cache/
+.dmypy.json
+dmypy.json
+.ruff_cache/
+
+# Django
+*.log
+local_settings.py
+db.sqlite3
+db.sqlite3-journal
+media/
+staticfiles/
+
+# Медиа/вложения пользователей (ПДн)
+backend/media/
+backend/staticfiles/
+
+# ===== Node / Frontend =====
+node_modules/
+.pnp
+.pnp.js
+.pnp.cjs
+.pnp.zips
+
+# Сборка
+frontend/dist/
+frontend/build/
+*.tsbuildinfo
+
+# Vitest / Playwright
+coverage/
+.nyc_output/
+playwright-report/
+test-results/
+blob-report/
+.playwright/
+
+# Vite
+*.local
+
+# ===== IDE / редакторы =====
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.project
+.classpath
+.settings/
+*.sublime-workspace
+*.sublime-project
+
+# ===== OS =====
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+desktop.ini
+
+# ===== Docker / инфраструктура =====
+docker/data/
+docker/volumes/
+postgres-data/
+redis-data/
+*.tar
+
+# ===== Прочее =====
+*.bak
+*.tmp
+*.temp
+*.orig
+*.rej
+/.advisor/
