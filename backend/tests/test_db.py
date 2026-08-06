@@ -14,10 +14,10 @@ from django.contrib.auth import get_user_model
 def test_database_can_persist_object() -> None:
     """Создание и чтение записи работает (БД подключена)."""
     user_model = get_user_model()
-    user = user_model.objects.create_user(username="alice", password="strong-pwd-12345")
+    user = user_model.objects.create_user(email="alice@corp.local", password="strong-pwd-12345")
 
     fetched = user_model.objects.get(pk=user.pk)
-    assert fetched.username == "alice"
+    assert fetched.email == "alice@corp.local"
     # Пароль захеширован (не хранится в открытом виде).
     assert fetched.password != "strong-pwd-12345"
     assert fetched.check_password("strong-pwd-12345")

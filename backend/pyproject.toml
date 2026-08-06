@@ -105,6 +105,10 @@ ignore = [
 # DRF-классы переопределяют атрибуты базового класса (permission_classes и др.)
 # как instance vars; ClassVar здесь конфликтует с mypy — игнорируем RUF012.
 "**/views.py" = ["RUF012"]
+# Модели Django: внутри class Meta ClassVar неприменим; RUF012 даёт ложные срабатывания.
+"**/models.py" = ["RUF012"]
+# Сериалайзеры DRF: class Meta — тот же паттерн; ClassVar неприменим.
+"**/serializers.py" = ["RUF012"]
 
 [tool.ruff.lint.isort]
 known-first-party = ["vektor"]
@@ -122,6 +126,9 @@ warn_return_any = true
 no_implicit_optional = true
 show_error_codes = true
 files = ["vektor", "apps", "tests"]
+# Домены импортируются как apps.<name> (см. AppConfig.name). Чтобы mypy не
+# находил их дважды (apps.users и users), фиксируем базу пакета.
+explicit_package_bases = true
 
 # Сгенерированные файлы не типизируем.
 [[tool.mypy.overrides]]
@@ -132,6 +139,12 @@ ignore_errors = true
 [[tool.mypy.overrides]]
 module = ["celery.*", "dj_database_url", "dotenv"]
 ignore_missing_imports = true
+
+# Admin-модули: ModelAdmin/UserAdmin не являются Generic в рантайме Django,
+# подписка ломает код. Отключаем требования type-arg (стандартная практика).
+[[tool.mypy.overrides]]
+module = ["*.admin", "apps.*.admin"]
+disable_error_code = ["type-arg", "misc"]
 
 # Строки конфигурации для плагина django-stubs.
 [tool.django-stubs]
@@ -153,7 +166,7 @@ addopts = [
     "--cov=apps",
     "--cov-report=term-missing",
 ]
-testpaths = ["tests"]
+testpaths = ["tests", "apps"]
 
 [tool.coverage.run]
 branch = true

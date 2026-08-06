@@ -1,17 +1,6 @@
-"""Общие фикстуры pytest для проекта Vektor.
+"""Conftest для общих/интеграционных тестов (tests/).
 
-Фикстура ``client`` использует DRF-совместимый тестовый клиент через
-``APIClient`` — это даёт единый стиль для будущих API-тестов (AGENTS.md §3).
+Общие фикстуры (client, rf_request) живут в корневом ``backend/conftest.py``
+и автоматически доступны всем тестам — tests/ и apps/*.tests/.
+Здесь размещаем только специфичные для интеграционных тестов фикстуры.
 """
-
-from __future__ import annotations
-
-import pytest
-from django.test import Client
-from rest_framework.test import APIClient
-
-
-@pytest.fixture()
-def client() -> Client:
-    """Тестовый клиент Django (DRF APIClient как расширенная версия)."""
-    return APIClient()
