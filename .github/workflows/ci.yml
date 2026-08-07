@@ -32,10 +32,12 @@ jobs:
         with:
           node-version: 20
 
-      - name: Проверить.editorconfig
-        uses: editorconfig-checker/action-editorconfig-checker@v2
-        with:
-          version: 3.8.0  # актуальный стабильный релиз editorconfig-checker
+      - name: Проверить .editorconfig
+        # Сторонний action editorconfig-checker/action-editorconfig-checker@v2
+        # сломан (HttpError: Not Found при поиске релиза на актуальных runners).
+        # Используем npm-пакет editorconfig-checker напрямую — надёжнее.
+        run: |
+          npx --yes editorconfig-checker@6.1.1
 
       - name: Скан секретов (gitleaks)
         uses: gitleaks/gitleaks-action@v2

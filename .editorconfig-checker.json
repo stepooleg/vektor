@@ -1,0 +1,15 @@
+{
+  "$schema": "https://raw.githubusercontent.com/editorconfig-checker/editorconfig-checker/v3.8.0/.editorconfig-checker.schema.json",
+  "Verbose": false,
+  "Exclude": [
+    "node_modules",
+    "\\.venv",
+    "\\.git",
+    "migrations",
+    "\\.md$"
+  ],
+  "Disable": {
+    "Indentation": true,
+    "IndentSize": true
+  }
+}
