@@ -1,0 +1,29 @@
+# Gitleaks-конфиг Vektor (https://github.com/gitleaks/gitleaks).
+#
+# Расширяет дефолтные правила и добавляет allowlist для ложных срабатываний:
+# тестовые пароли в фикстурах (Strong-Pwd-...) — это не реальные секреты,
+# а стандартные данные автотестов (AGENTS.md §3).
+title = "Vektor gitleaks config"
+
+[extend]
+# Наследуем дефолтные правила gitleaks и дополняем allowlist'ом.
+useDefault = true
+
+# Глобальный allowlist: пути и паттерны, которые НЕ считаем секретами.
+[allowlist]
+description = "Ложные срабатывания: тестовые фикстуры и примеры конфигов"
+paths = [
+    '''node_modules/''',
+    '''\.venv/''',
+    # Тесты содержат тестовые пароли для фикстур — это не секреты.
+    '''backend/apps/.*/tests/.*\.py$''',
+    '''backend/tests/.*\.py$''',
+    # Пример конфига окружения (без реальных секретов — плейсхолдеры).
+    '''\.env\.example$''',
+]
+regexes = [
+    # Тестовые пароли фикстур автотестов (Strong-Pwd-...).
+    '''Strong-Pwd-\d+''',
+    # Инверсный Django-секрет из dev-fallback (не для прода).
+    '''django-insecure-DEV-ONLY-CHANGE-ME''',
+]

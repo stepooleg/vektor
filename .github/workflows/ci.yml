@@ -44,6 +44,8 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITLEAKS_ENABLE_COMMENTS: true
+          # Кастомный конфиг с allowlist для тестовых паролей фикстур.
+          GITLEAKS_CONFIG: gitleaks.toml
 
       - name: Markdown lint
         run: |
