@@ -69,6 +69,7 @@ DJANGO_APPS: tuple[str, ...] = (
 THIRD_PARTY_APPS: tuple[str, ...] = (
     "rest_framework",
     "drf_spectacular",
+    "django_filters",
     "corsheaders",
 )
 
