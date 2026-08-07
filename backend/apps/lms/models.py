@@ -117,3 +117,102 @@ class CourseCompetencyLink(models.Model):
     def __str__(self) -> str:
         """Курс и компетенция."""
         return f"{self.course} → {self.competency}"
+
+
+class Lesson(models.Model):
+    """Урок курса — текстовый материал или тест (SPEC §7.2, §7.3).
+
+    Порядок в курсе задаётся полем ``order`` (редактор, SPEC §7.3).
+    """
+
+    class Type(models.TextChoices):
+        TEXT = "text", _("Текстовый материал")
+        QUIZ = "quiz", _("Тест")
+
+    course = models.ForeignKey(
+        Course,
+        on_delete=models.CASCADE,
+        related_name="lessons",
+        verbose_name=_("Курс"),
+    )
+    title = models.CharField(_("Название"), max_length=300)
+    type = models.CharField(_("Тип"), max_length=8, choices=Type.choices)
+    order = models.PositiveSmallIntegerField(_("Порядок"), default=0)
+    # Текстовый материал (для type=text).
+    content = models.TextField(_("Содержание (текст)"), blank=True)
+    # Настройки теста (для type=quiz, SPEC §7.2).
+    pass_score = models.PositiveSmallIntegerField(_("Проходной балл, %"), default=80)
+    max_attempts = models.PositiveSmallIntegerField(_("Максимум попыток"), default=3)
+    shuffle_questions = models.BooleanField(_("Перемешивать вопросы"), default=False)
+
+    class Meta:
+        verbose_name = _("Урок")
+        verbose_name_plural = _("Уроки")
+        ordering = ["course", "order", "id"]
+        unique_together = [("course", "order")]
+
+    def __str__(self) -> str:
+        """Название урока."""
+        return self.title
+
+
+class Question(models.Model):
+    """Вопрос теста (SPEC §7.2).
+
+    Типы: один ответ / несколько ответов / шкала / текст.
+    Для «текст» автопроверка невозможна (требует куратора).
+    """
+
+    class Type(models.TextChoices):
+        SINGLE = "single", _("Один ответ")
+        MULTIPLE = "multiple", _("Несколько ответов")
+        SCALE = "scale", _("Шкала")
+        TEXT = "text", _("Текстовый ответ")
+
+    lesson = models.ForeignKey(
+        Lesson,
+        on_delete=models.CASCADE,
+        related_name="questions",
+        verbose_name=_("Урок"),
+        limit_choices_to={"type": "quiz"},
+    )
+    text = models.TextField(_("Текст вопроса"))
+    type = models.CharField(_("Тип"), max_length=8, choices=Type.choices)
+    order = models.PositiveSmallIntegerField(_("Порядок"), default=0)
+    # Балл за вопрос (для расчёта результата).
+    score = models.PositiveSmallIntegerField(_("Балл"), default=1)
+
+    class Meta:
+        verbose_name = _("Вопрос")
+        verbose_name_plural = _("Вопросы")
+        ordering = ["lesson", "order", "id"]
+
+    def __str__(self) -> str:
+        """Краткий текст вопроса."""
+        return self.text[:80]
+
+
+class AnswerOption(models.Model):
+    """Вариант ответа на вопрос (для single/multiple, SPEC §7.2).
+
+    ``is_correct`` — флаг правильного варианта (для автопроверки).
+    """
+
+    question = models.ForeignKey(
+        Question,
+        on_delete=models.CASCADE,
+        related_name="options",
+        verbose_name=_("Вопрос"),
+    )
+    text = models.CharField(_("Текст варианта"), max_length=500)
+    is_correct = models.BooleanField(_("Правильный"), default=False)
+    order = models.PositiveSmallIntegerField(_("Порядок"), default=0)
+
+    class Meta:
+        verbose_name = _("Вариант ответа")
+        verbose_name_plural = _("Варианты ответов")
+        ordering = ["question", "order", "id"]
+
+    def __str__(self) -> str:
+        """Текст варианта."""
+        return self.text
