@@ -9,6 +9,7 @@ import ruRU from "antd/locale/ru_RU";
 import { useMemo } from "react";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 
+import { AssessmentPage } from "@/pages/AssessmentPage";
 import { CompetenciesPage } from "@/pages/CompetenciesPage";
 import { DashboardPage } from "@/pages/DashboardPage";
 import { LoginPage } from "@/pages/LoginPage";
@@ -27,15 +28,7 @@ function ProtectedRoutes(): React.JSX.Element {
     <Routes>
       <Route element={<AppLayout themeMode={mode} onThemeChange={setMode} />}>
         <Route path="/" element={<DashboardPage />} />
-        <Route
-          path="/assessment"
-          element={
-            <PlaceholderPage
-              title="Оценка"
-              description="Циклы оценки 360°, самооценка, результаты."
-            />
-          }
-        />
+        <Route path="/assessment" element={<AssessmentPage />} />
         <Route path="/competencies" element={<CompetenciesPage />} />
         <Route
           path="/learning"
