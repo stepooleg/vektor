@@ -1,0 +1,30 @@
+/* Бейдж статуса (BRANDBOOK §6.8): заливка цвета с альфой 10%, насыщенный текст. */
+.vektor-status-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 10px;
+  border-radius: var(--radius-pill);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 18px;
+}
+
+.vektor-status-badge--neutral {
+  background-color: var(--bg-subtle);
+  color: var(--text-secondary);
+}
+
+.vektor-status-badge--primary {
+  background-color: color-mix(in srgb, var(--color-primary) 10%, transparent);
+  color: var(--color-primary);
+}
+
+.vektor-status-badge--accent {
+  background-color: color-mix(in srgb, var(--color-accent) 10%, transparent);
+  color: var(--color-accent);
+}
+
+.vektor-status-badge--error {
+  background-color: color-mix(in srgb, var(--color-error) 10%, transparent);
+  color: var(--color-error);
+}
