@@ -35,7 +35,7 @@ jobs:
       - name: Проверить.editorconfig
         uses: editorconfig-checker/action-editorconfig-checker@v2
         with:
-          version: 3.2.0
+          version: 3.8.0  # актуальный стабильный релиз editorconfig-checker
 
       - name: Скан секретов (gitleaks)
         uses: gitleaks/gitleaks-action@v2
