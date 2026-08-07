@@ -32,16 +32,24 @@ jobs:
         with:
           node-version: 20
 
-      - name: Проверить.editorconfig
-        uses: editorconfig-checker/action-editorconfig-checker@v2
-        with:
-          version: 3.2.0
+      - name: Проверить .editorconfig
+        # Сторонний action editorconfig-checker/action-editorconfig-checker@v2
+        # сломан (HttpError: Not Found при поиске релиза на актуальных runners).
+        # Используем npm-пакет editorconfig-checker напрямую — надёжнее.
+        run: |
+          npx --yes editorconfig-checker@6.1.1
 
       - name: Скан секретов (gitleaks)
-        uses: gitleaks/gitleaks-action@v2
+        # Запускаем gitleaks напрямую (бинарник), а не через gitleaks-action@v2:
+        # action в «cached» режиме игнорирует GITLEAKS_CONFIG/gitleaks.toml,
+        # из-за чего allowlist не применяется. Прямой запуск с --config надёжнее.
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GITLEAKS_ENABLE_COMMENTS: true
+          GITLEAKS_VERSION: "8.24.3"
+        run: |
+          curl -sSL "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" \
+            | sudo tar -xz -C /usr/local/bin gitleaks
+          gitleaks detect --config gitleaks.toml --redact --no-banner \
+            --exit-code 1 --report-format sarif --report-path gitleaks-results.sarif
 
       - name: Markdown lint
         run: |
