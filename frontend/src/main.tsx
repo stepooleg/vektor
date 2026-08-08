@@ -1,7 +1,8 @@
 /**
- * Точка входа приложения Vektor (issue #2).
+ * Точка входа приложения Vektor (issue #2, #24 PWA).
  *
- * Монтирует <App/> в #root, подключает глобальные стили (токены, шрифт, темы).
+ * Монтирует <App/> в #root, подключает глобальные стили (токены, шрифт, темы),
+ * регистрирует Service Worker для PWA и push-уведомлений (SPEC §10.4).
  */
 import React from "react";
 import ReactDOM from "react-dom/client";
@@ -19,3 +20,13 @@ ReactDOM.createRoot(rootElement).render(
     <App />
   </React.StrictMode>,
 );
+
+// Регистрация Service Worker (PWA + push, SPEC §10.4).
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("/sw.js").catch((err) => {
+      // SW-ошибки не блокируют приложение — логируем.
+      console.warn("Service Worker registration failed:", err);
+    });
+  });
+}

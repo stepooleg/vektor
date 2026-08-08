@@ -12,6 +12,8 @@ import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { AssessmentPage } from "@/pages/AssessmentPage";
 import { CompetenciesPage } from "@/pages/CompetenciesPage";
 import { DashboardPage } from "@/pages/DashboardPage";
+import { IdpPage } from "@/pages/IdpPage";
+import { LearningPage } from "@/pages/LearningPage";
 import { LoginPage } from "@/pages/LoginPage";
 import { PlaceholderPage } from "@/pages/PlaceholderPage";
 import { buildAntdConfig } from "./antdTheme";
@@ -30,21 +32,8 @@ function ProtectedRoutes(): React.JSX.Element {
         <Route path="/" element={<DashboardPage />} />
         <Route path="/assessment" element={<AssessmentPage />} />
         <Route path="/competencies" element={<CompetenciesPage />} />
-        <Route
-          path="/learning"
-          element={
-            <PlaceholderPage
-              title="Обучение"
-              description="Каталог курсов, прохождение, личный кабинет."
-            />
-          }
-        />
-        <Route
-          path="/idp"
-          element={
-            <PlaceholderPage title="ИПР" description="Индивидуальный план развития и прогресс." />
-          }
-        />
+        <Route path="/learning" element={<LearningPage />} />
+        <Route path="/idp" element={<IdpPage />} />
         <Route
           path="/portfolio"
           element={
