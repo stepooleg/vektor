@@ -50,6 +50,17 @@ class AssessmentCycleViewSet(ModelViewSet[AssessmentCycle]):
         """Вернуть агрегированные результаты цикла (только агрегаты)."""
         cycle = self.get_object()
         aggregate = aggregate_cycle(cycle)
+        # Аудит доступа к результатам цикла (SPEC §12.3).
+        from apps.audit.services import log_action
+
+        actor = request.user if request.user.is_authenticated else None
+        log_action(
+            actor=actor,
+            action="assessment.result.view",
+            target_type="assessment.cycle",
+            target_id=str(cycle.id),
+            details={"cycle_name": cycle.name},
+        )
         return Response(
             {
                 "cycle_id": aggregate.cycle_id,
