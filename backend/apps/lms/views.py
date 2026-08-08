@@ -61,8 +61,10 @@ class CourseViewSet(viewsets.ModelViewSet[Course]):
         """Сотрудник видит только опубликованные; Методолог/HR — все."""
         qs = Course.objects.select_related("category").distinct()
         user = self.request.user
-        if getattr(user, "is_authenticated", False) and user.has_any_role(  # type: ignore[union-attr]
-            Role.Code.METHODOLOGIST.value, Role.Code.HR.value
+        is_staff = getattr(user, "is_authenticated", False)
+        if is_staff and user.has_any_role(  # type: ignore[union-attr]
+            Role.Code.METHODOLOGIST.value,
+            Role.Code.HR.value,
         ):
             return qs
         return qs.filter(status=Course.Status.PUBLISHED.value)
