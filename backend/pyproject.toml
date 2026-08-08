@@ -35,6 +35,9 @@ dependencies = [
     "argon2-cffi>=23.1,<25",
     # Web Push (PWA, SPEC §10.4)
     "pywebpush>=2.0,<3",
+    # Экспорт отчётов (SPEC §9.5)
+    "reportlab>=4.2,<5",
+    "openpyxl>=3.1,<4",
     # Очереди/фон (Celery + Redis)
     "celery[redis]>=5.4,<6",
     "redis>=5.0,<6",
@@ -55,6 +58,7 @@ dev = [
     "django-stubs[compatible-mypy]>=5.0,<6",
     "djangorestframework-stubs>=3.15,<4",
     "types-django-filter>=7.0,<27",
+    "types-openpyxl>=3.1,<4",
     # Утилиты
     "ipython>=8.27,<9",
 ]
@@ -141,7 +145,14 @@ ignore_errors = true
 
 # Сторонние библиотеки без py.typed / стабов — не блокируют проверки.
 [[tool.mypy.overrides]]
-module = ["celery.*", "dj_database_url", "dotenv", "pywebpush"]
+module = [
+    "celery.*",
+    "dj_database_url",
+    "dotenv",
+    "pywebpush",
+    "reportlab",
+    "reportlab.lib.styles",
+]
 ignore_missing_imports = true
 
 # Admin-модули: ModelAdmin/UserAdmin не являются Generic в рантайме Django,
