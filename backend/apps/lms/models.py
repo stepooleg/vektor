@@ -330,3 +330,81 @@ class TaskReview(models.Model):
     def __str__(self) -> str:
         """Статус зачёта."""
         return f"{'Зачёт' if self.passed else 'Незачёт'}: {self.submission.task}"
+
+
+class Enrollment(models.Model):
+    """Запись сотрудника на курс (SPEC §7.1, §7.4).
+
+    Хранит статус прохождения и % завершения (расчёт через LessonProgress).
+    Сертификация — только статус «пройдён/не пройдён» (SPEC §7.4, без PDF).
+    """
+
+    class Status(models.TextChoices):
+        IN_PROGRESS = "in_progress", _("В процессе")
+        COMPLETED = "completed", _("Пройдён")
+        NOT_STARTED = "not_started", _("Не начат")
+
+    course = models.ForeignKey(
+        Course,
+        on_delete=models.CASCADE,
+        related_name="enrollments",
+        verbose_name=_("Курс"),
+    )
+    employee = models.ForeignKey(
+        "orgstructure.Employee",
+        on_delete=models.CASCADE,
+        related_name="enrollments",
+        verbose_name=_("Сотрудник"),
+    )
+    status = models.CharField(
+        _("Статус"),
+        max_length=16,
+        choices=Status.choices,
+        default=Status.NOT_STARTED,
+    )
+    progress_percent = models.PositiveSmallIntegerField(_("Прогресс, %"), default=0)
+    enrolled_at = models.DateTimeField(_("Записан"), auto_now_add=True)
+    completed_at = models.DateTimeField(_("Завершён"), null=True, blank=True)
+
+    class Meta:
+        verbose_name = _("Запись на курс")
+        verbose_name_plural = _("Записи на курсы")
+        unique_together = [("course", "employee")]
+        ordering = ["-enrolled_at"]
+
+    def __str__(self) -> str:
+        """Курс и сотрудник."""
+        return f"{self.course} — {self.employee}"
+
+
+class LessonProgress(models.Model):
+    """Прогресс сотрудника по конкретному уроку (SPEC §7.4).
+
+    ``completed=True`` — урок пройден (текст прочитан / тест сдан / задание зачтено).
+    """
+
+    enrollment = models.ForeignKey(
+        Enrollment,
+        on_delete=models.CASCADE,
+        related_name="lesson_progresses",
+        verbose_name=_("Запись на курс"),
+    )
+    lesson = models.ForeignKey(
+        Lesson,
+        on_delete=models.CASCADE,
+        related_name="progresses",
+        verbose_name=_("Урок"),
+    )
+    completed = models.BooleanField(_("Пройден"), default=False)
+    # Лучший результат теста (для quiz-уроков, %).
+    best_score = models.PositiveSmallIntegerField(default=0)
+    updated_at = models.DateTimeField(_("Обновлён"), auto_now=True)
+
+    class Meta:
+        verbose_name = _("Прогресс по уроку")
+        verbose_name_plural = _("Прогресс по урокам")
+        unique_together = [("enrollment", "lesson")]
+
+    def __str__(self) -> str:
+        """Урок и статус."""
+        return f"{self.lesson} — {'✓' if self.completed else '…'}"

@@ -194,3 +194,64 @@ def _notify_review_result(submission: Submission, passed: bool) -> None:
             "result": "зачтено" if passed else "не зачтено",
         },
     )
+
+
+# ---------------------------------------------------------------------------
+# Прогресс и сертификация (SPEC §7.4, issue #22)
+# ---------------------------------------------------------------------------
+from .models import Enrollment, LessonProgress  # noqa: E402
+
+
+def mark_lesson_completed(enrollment: Enrollment, lesson: Lesson) -> LessonProgress:
+    """Отметить урок пройденным и пересчитать прогресс курса (SPEC §7.4)."""
+    progress, _ = LessonProgress.objects.update_or_create(
+        enrollment=enrollment,
+        lesson=lesson,
+        defaults={"completed": True},
+    )
+    recalculate_progress(enrollment)
+    return progress
+
+
+def recalculate_progress(enrollment: Enrollment) -> Enrollment:
+    """Пересчитать % завершения и статус курса (SPEC §7.4).
+
+    Прогресс = % пройденных уроков. При достижении pass_threshold — статус
+    COMPLETED и запись в портфолио.
+    """
+    from django.utils import timezone
+
+    total = enrollment.course.lessons.count()
+    completed = enrollment.lesson_progresses.filter(completed=True).count()
+    percent = int(round(completed / total * 100)) if total else 0
+    enrollment.progress_percent = percent
+
+    just_completed = False
+    if (
+        percent >= enrollment.course.pass_threshold
+        and enrollment.status != Enrollment.Status.COMPLETED.value
+    ):
+        enrollment.status = Enrollment.Status.COMPLETED.value
+        enrollment.completed_at = timezone.now()
+        just_completed = True
+    elif percent > 0 and enrollment.status == Enrollment.Status.NOT_STARTED.value:
+        enrollment.status = Enrollment.Status.IN_PROGRESS.value
+
+    enrollment.save(update_fields=["status", "progress_percent", "completed_at"])
+
+    if just_completed:
+        _record_course_to_portfolio(enrollment)
+
+    return enrollment
+
+
+def _record_course_to_portfolio(enrollment: Enrollment) -> None:
+    """Записать пройденный курс в портфолио сотрудника (SPEC §7.4)."""
+    from apps.portfolio.models import PortfolioEntry
+
+    PortfolioEntry.objects.get_or_create(
+        employee=enrollment.employee,
+        type=PortfolioEntry.Type.COURSE_PASSED.value,
+        title=f"Курс пройдён: {enrollment.course.title}",
+        defaults={"description": enrollment.course.description},
+    )
