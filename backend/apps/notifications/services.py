@@ -111,6 +111,14 @@ def _is_enabled_for_user(user: User, event: str) -> bool:
     return pref.email_enabled
 
 
+def _is_push_enabled_for_user(user: User, event: str) -> bool:
+    """Разрешён ли push-канал для события (SPEC §13.3)."""
+    pref = UserNotificationPreference.objects.filter(user=user, event=event).first()
+    if pref is None:
+        return True
+    return pref.push_enabled
+
+
 def dispatch_notification(
     *,
     event: str,
@@ -120,8 +128,8 @@ def dispatch_notification(
 ) -> Notification | None:
     """Создать и отправить уведомление пользователю с учётом его настроек.
 
-    Возвращает ``Notification`` (отправленный) или ``None``, если событие
-    отфильтровано настройками пользователя.
+    Отправляет email + (при активной push-подписке и разрешённых настройках) push.
+    Возвращает ``Notification`` или ``None``, если событие отфильтровано.
     """
     if not _is_enabled_for_user(user, event):
         return None
@@ -137,8 +145,19 @@ def dispatch_notification(
         notif.mark_failed("Имитация ошибки SMTP (тест)")
         raise NotificationError("Имитация ошибки SMTP")
 
+    # Email-канал (основной, §13.1).
     channel = get_email_channel()
     channel.send(notif)
+
+    # Push-канал (при активных подписках и разрешённых настройках, §10.4, §13.1).
+    if (
+        _is_push_enabled_for_user(user, event)
+        and user.push_subscriptions.filter(is_active=True).exists()
+    ):
+        from .channels import get_push_channel
+
+        get_push_channel().send_to_user(user, {"title": notif.subject, "body": notif.body})
+
     return notif
 
 
