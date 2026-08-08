@@ -19,7 +19,7 @@ from apps.assessment.models import (
 )
 
 if TYPE_CHECKING:
-    from apps.orgstructure.models import Employee
+    from apps.orgstructure.models import Department, Employee
 
 
 @dataclass(frozen=True)
@@ -149,3 +149,76 @@ def can_view_employee_dashboard(viewer: Employee, target: Employee) -> bool:
     if viewer_user.has_any_role(Role.Code.MANAGER.value):
         return viewer.id == target.id or target in viewer.get_subordinates()
     return viewer.id == target.id
+
+
+# ---------------------------------------------------------------------------
+# Дашборды по компании и подразделениям (SPEC §9.1, §9.3, issue #30)
+# ---------------------------------------------------------------------------
+
+
+def build_company_dashboard() -> dict[str, object]:
+    """Агрегированный дашборд по компании (SPEC §9.1).
+
+    Возвращает: total_employees, assessed_employees, assessment_coverage (%),
+    average_score, total_cycles. Только агрегаты — без сырых данных (§6.3).
+    """
+    from apps.orgstructure.models import Employee
+
+    total = Employee.objects.filter(is_active=True).count()
+    assessed_ids = set(
+        Participant.objects.filter(
+            cycle__status=AssessmentCycle.Status.AGGREGATED.value
+        ).values_list("employee_id", flat=True)
+    )
+    assessed = len(assessed_ids)
+    coverage = round(assessed / total * 100, 2) if total else 0.0
+
+    avg = AssessmentResponse.objects.filter(
+        assignment__completed=True,
+        assignment__participant__cycle__status=AssessmentCycle.Status.AGGREGATED.value,
+    ).aggregate(m=Avg("score"))["m"]
+    average_score = round(float(avg), 2) if avg else 0.0
+
+    total_cycles = AssessmentCycle.objects.count()
+
+    return {
+        "total_employees": total,
+        "assessed_employees": assessed,
+        "assessment_coverage": coverage,
+        "average_score": average_score,
+        "total_cycles": total_cycles,
+    }
+
+
+def build_department_dashboard(department: Department) -> dict[str, object]:
+    """Агрегированный дашборд по подразделению (SPEC §9.3).
+
+    Возвращает: department_name, total_employees, assessed_employees,
+    assessment_coverage (%), average_score.
+    """
+    from apps.orgstructure.models import Employee
+
+    total = Employee.objects.filter(is_active=True, department=department).count()
+    assessed_ids = set(
+        Participant.objects.filter(
+            cycle__status=AssessmentCycle.Status.AGGREGATED.value,
+            employee__department=department,
+        ).values_list("employee_id", flat=True)
+    )
+    assessed = len(assessed_ids)
+    coverage = round(assessed / total * 100, 2) if total else 0.0
+
+    avg = AssessmentResponse.objects.filter(
+        assignment__completed=True,
+        assignment__participant__employee__department=department,
+        assignment__participant__cycle__status=AssessmentCycle.Status.AGGREGATED.value,
+    ).aggregate(m=Avg("score"))["m"]
+    average_score = round(float(avg), 2) if avg else 0.0
+
+    return {
+        "department_name": department.name,
+        "total_employees": total,
+        "assessed_employees": assessed,
+        "assessment_coverage": coverage,
+        "average_score": average_score,
+    }

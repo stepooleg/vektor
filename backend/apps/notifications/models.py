@@ -48,6 +48,10 @@ class Notification(models.Model):
         verbose_name = _("Уведомление")
         verbose_name_plural = _("Уведомления")
         ordering = ["-created_at"]
+        # Индекс для anti-spam-проверки (поиск по event+email+sent_at).
+        indexes = [
+            models.Index(fields=["event", "recipient_email"], name="notif_event_email_idx"),
+        ]
 
     def __str__(self) -> str:
         """Тема и получатель."""
