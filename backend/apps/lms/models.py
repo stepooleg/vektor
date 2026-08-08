@@ -216,3 +216,117 @@ class AnswerOption(models.Model):
     def __str__(self) -> str:
         """Текст варианта."""
         return self.text
+
+
+class PracticalTask(models.Model):
+    """Практическое задание курса с проверкой куратором (SPEC §7.2).
+
+    Сотрудник прикрепляет ответ (текст/файл); куратор проверяет, оставляет
+    комментарий и оценку («зачёт/незачёт» или по шкале).
+    """
+
+    lesson = models.ForeignKey(
+        Lesson,
+        on_delete=models.CASCADE,
+        related_name="practical_tasks",
+        verbose_name=_("Урок"),
+    )
+    title = models.CharField(_("Название задания"), max_length=300)
+    description = models.TextField(_("Описание задания"))
+    # Ответственный куратор (назначается Методологом/HR).
+    reviewer = models.ForeignKey(
+        "orgstructure.Employee",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="tasks_to_review",
+        verbose_name=_("Куратор"),
+    )
+
+    class Meta:
+        verbose_name = _("Практическое задание")
+        verbose_name_plural = _("Практические задания")
+        ordering = ["lesson", "id"]
+
+    def __str__(self) -> str:
+        """Название задания."""
+        return self.title
+
+
+class Submission(models.Model):
+    """Ответ сотрудника на практическое задание (SPEC §7.2).
+
+    Жизненный цикл: submitted → in_review → reviewed.
+    """
+
+    class Status(models.TextChoices):
+        SUBMITTED = "submitted", _("Отправлено")
+        IN_REVIEW = "in_review", _("На проверке")
+        REVIEWED = "reviewed", _("Проверено")
+
+    task = models.ForeignKey(
+        PracticalTask,
+        on_delete=models.CASCADE,
+        related_name="submissions",
+        verbose_name=_("Задание"),
+    )
+    # Кто сдал ответ.
+    employee = models.ForeignKey(
+        "orgstructure.Employee",
+        on_delete=models.CASCADE,
+        related_name="task_submissions",
+        verbose_name=_("Сотрудник"),
+    )
+    answer_text = models.TextField(_("Текст ответа"), blank=True)
+    # TODO(#21): прикрепление файла (FileField + storage) — добавить при UI.
+    status = models.CharField(
+        _("Статус"),
+        max_length=16,
+        choices=Status.choices,
+        default=Status.SUBMITTED,
+    )
+    submitted_at = models.DateTimeField(_("Отправлено"), auto_now_add=True)
+    reviewed_at = models.DateTimeField(_("Проверено"), null=True, blank=True)
+
+    class Meta:
+        verbose_name = _("Ответ на задание")
+        verbose_name_plural = _("Ответы на задания")
+        ordering = ["-submitted_at"]
+        unique_together = [("task", "employee")]
+
+    def __str__(self) -> str:
+        """Задание и сотрудник."""
+        return f"{self.task} — {self.employee}"
+
+
+class TaskReview(models.Model):
+    """Оценка куратора практического задания (SPEC §7.2).
+
+    «Зачёт/незачёт» (``passed``) или по шкале (``score``).
+    """
+
+    submission = models.OneToOneField(
+        Submission,
+        on_delete=models.CASCADE,
+        related_name="review",
+        verbose_name=_("Ответ"),
+    )
+    reviewer = models.ForeignKey(
+        "orgstructure.Employee",
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name="task_reviews",
+        verbose_name=_("Куратор"),
+    )
+    passed = models.BooleanField(_("Зачтено"), default=False)
+    score = models.PositiveSmallIntegerField(_("Оценка по шкале"), null=True, blank=True)
+    comment = models.TextField(_("Комментарий куратора"), blank=True)
+    created_at = models.DateTimeField(_("Создано"), auto_now_add=True)
+
+    class Meta:
+        verbose_name = _("Проверка задания")
+        verbose_name_plural = _("Проверки заданий")
+
+    def __str__(self) -> str:
+        """Статус зачёта."""
+        return f"{'Зачёт' if self.passed else 'Незачёт'}: {self.submission.task}"

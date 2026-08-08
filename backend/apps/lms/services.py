@@ -18,6 +18,8 @@ from .models import AnswerOption, Lesson, Question
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
+    from django.db.models import QuerySet
+
 
 @dataclass(frozen=True)
 class GradeResult:
@@ -84,4 +86,111 @@ def correct_option_ids(question: Question) -> set[int]:
     """Множество ID правильных вариантов вопроса (для UI/диагностики)."""
     return set(
         AnswerOption.objects.filter(question=question, is_correct=True).values_list("id", flat=True)
+    )
+
+
+# ---------------------------------------------------------------------------
+# Практические задания с проверкой куратором (SPEC §7.2, issue #21)
+# ---------------------------------------------------------------------------
+from apps.orgstructure.models import Employee  # noqa: E402
+from apps.users.models import Role  # noqa: E402
+
+from .models import PracticalTask, Submission, TaskReview  # noqa: E402
+
+
+class ReviewNotAllowed(Exception):
+    """Недостаточно прав для проверки задания."""
+
+
+def submit_practical_task(
+    *, task: PracticalTask, employee: Employee, answer_text: str
+) -> Submission:
+    """Сотрудник отправляет ответ на задание (SPEC §7.2).
+
+    Идемпотентно по (task, employee): обновляет текст, переводит в submitted.
+    """
+    submission, _ = Submission.objects.update_or_create(
+        task=task,
+        employee=employee,
+        defaults={
+            "answer_text": answer_text,
+            "status": Submission.Status.SUBMITTED.value,
+            "reviewed_at": None,
+        },
+    )
+    return submission
+
+
+def get_review_queue(reviewer: Employee) -> QuerySet[Submission]:
+    """Очередь заданий на проверку для куратора (submitted/in_review).
+
+    Методолог/HR видят все непроверенные; назначенный куратор — свои.
+    """
+    qs = Submission.objects.filter(
+        status__in=[
+            Submission.Status.SUBMITTED.value,
+            Submission.Status.IN_REVIEW.value,
+        ]
+    )
+    user = reviewer.user
+    if user.has_any_role(Role.Code.METHODOLOGIST.value, Role.Code.HR.value):
+        return qs
+    return qs.filter(task__reviewer=reviewer)
+
+
+def _can_review(reviewer: Employee, submission: Submission) -> bool:
+    """Может ли сотрудник проверять эту submission (SPEC §7.2)."""
+    user = reviewer.user
+    if user.has_any_role(Role.Code.METHODOLOGIST.value, Role.Code.HR.value):
+        return True
+    return submission.task.reviewer_id == reviewer.id
+
+
+def review_submission(
+    submission: Submission,
+    *,
+    reviewer: Employee,
+    passed: bool,
+    comment: str = "",
+    score: int | None = None,
+) -> TaskReview:
+    """Куратор проверяет ответ: оценка + комментарий → reviewed (SPEC §7.2).
+
+    Отправляет уведомление сотруднику о результате (SPEC §13.2).
+    """
+    if not _can_review(reviewer, submission):
+        raise ReviewNotAllowed("Только назначенный куратор может проверять задание")
+
+    from django.utils import timezone
+
+    review = TaskReview.objects.create(
+        submission=submission,
+        reviewer=reviewer,
+        passed=passed,
+        comment=comment,
+        score=score,
+    )
+    submission.status = Submission.Status.REVIEWED.value
+    submission.reviewed_at = timezone.now()
+    submission.save(update_fields=["status", "reviewed_at"])
+
+    # Уведомление сотруднику о результате (SPEC §13.2).
+    _notify_review_result(submission, passed)
+
+    return review
+
+
+def _notify_review_result(submission: Submission, passed: bool) -> None:
+    """Отправить сотруднику уведомление о результате проверки."""
+    from apps.notifications.services import dispatch_notification
+
+    if submission.employee.user_id is None:
+        return
+    dispatch_notification(
+        event="course.result",
+        user=submission.employee.user,
+        context={
+            "course_name": submission.task.lesson.course.title,
+            "result": "зачтено" if passed else "не зачтено",
+        },
     )
