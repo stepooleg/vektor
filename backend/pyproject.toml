@@ -23,6 +23,7 @@ dependencies = [
     "Django==5.2.9",
     "djangorestframework>=3.16,<3.17",
     "django-cors-headers>=4.4,<5",
+    "django-filter>=24.3,<25",
     # API-документация
     "drf-spectacular>=0.28,<0.30",
     # БД (PostgreSQL 16) — psycopg v3 (modern)
@@ -51,6 +52,7 @@ dev = [
     "mypy>=1.11,<2",
     "django-stubs[compatible-mypy]>=5.0,<6",
     "djangorestframework-stubs>=3.15,<4",
+    "types-django-filter>=7.0,<27",
     # Утилиты
     "ipython>=8.27,<9",
 ]

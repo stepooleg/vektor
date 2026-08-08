@@ -33,6 +33,7 @@ _SUBJECT_TEMPLATES: dict[str, str] = {
     NotificationEvent.ASSESSMENT_RESULT.value: "Готов итоговый отчёт по циклу «{cycle_name}»",
     NotificationEvent.FEEDBACK_RECEIVED.value: "Вам отправили обратную связь",
     NotificationEvent.COURSE_ASSIGNED.value: "Вам назначен курс",
+    NotificationEvent.COURSE_RESULT.value: "Результат проверки задания по курсу «{course_name}»",
     NotificationEvent.MANUAL_BROADCAST.value: "Сообщение от HR",
 }
 
@@ -59,6 +60,10 @@ _BODY_TEMPLATES: dict[str, str] = {
     ),
     NotificationEvent.COURSE_ASSIGNED.value: (
         "{name}, вам назначен новый курс. Начните обучение в разделе «Обучение»."
+    ),
+    NotificationEvent.COURSE_RESULT.value: (
+        "{name}, ваше практическое задание по курсу «{course_name}» {result}. "
+        "Подробности — в разделе «Обучение»."
     ),
     NotificationEvent.MANUAL_BROADCAST.value: "{name}, {body}",
 }

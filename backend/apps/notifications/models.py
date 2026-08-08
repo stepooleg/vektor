@@ -25,6 +25,7 @@ class NotificationEvent(models.TextChoices):
     ASSESSMENT_RESULT = "assessment.result", _("Итоговый отчёт по циклу")
     FEEDBACK_RECEIVED = "feedback.received", _("Получена обратная связь/благодарность")
     COURSE_ASSIGNED = "course.assigned", _("Назначен курс")
+    COURSE_RESULT = "course.result", _("Результат проверки задания")
     MANUAL_BROADCAST = "manual.broadcast", _("Ручная рассылка HR")
 
 
