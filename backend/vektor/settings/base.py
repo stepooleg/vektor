@@ -193,6 +193,14 @@ CACHES = {
 }
 
 # ---------------------------------------------------------------------------
+# Web Push (PWA, SPEC §10.4) — VAPID-ключи
+# ---------------------------------------------------------------------------
+# TODO(#24): VAPID-ключи должны генерироваться и храниться в секрете (env).
+VAPID_PUBLIC_KEY: str = os.environ.get("VAPID_PUBLIC_KEY", "")
+VAPID_PRIVATE_KEY: str = os.environ.get("VAPID_PRIVATE_KEY", "")
+VAPID_SUBJECT: str = os.environ.get("VAPID_SUBJECT", "mailto:no-reply@example.local")
+
+# ---------------------------------------------------------------------------
 # Internationalisation — только русский (SPEC §15)
 # ---------------------------------------------------------------------------
 LANGUAGE_CODE: str = "ru-ru"

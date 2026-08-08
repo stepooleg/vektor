@@ -89,3 +89,32 @@ class UserNotificationPreference(models.Model):
     def __str__(self) -> str:
         """Пользователь и событие."""
         return f"{self.user.email} — {self.event}"
+
+
+class PushSubscription(models.Model):
+    """Подписка пользователя на Web Push (SPEC §10.4).
+
+    Хранит endpoint и ключи подписки (P-256h, Auth). Один пользователь может
+    иметь несколько подписок (разные устройства/браузеры).
+    """
+
+    user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name="push_subscriptions",
+        verbose_name=_("Пользователь"),
+    )
+    endpoint = models.URLField(_("Endpoint подписки"), max_length=500)
+    p256dh = models.CharField(_("P-256dh ключ"), max_length=200)
+    auth = models.CharField(_("Auth ключ"), max_length=200)
+    created_at = models.DateTimeField(_("Создана"), auto_now_add=True)
+    is_active = models.BooleanField(_("Активна"), default=True)
+
+    class Meta:
+        verbose_name = _("Push-подписка")
+        verbose_name_plural = _("Push-подписки")
+        ordering = ["-created_at"]
+
+    def __str__(self) -> str:
+        """Email пользователя и статус."""
+        return f"Push: {self.user.email} ({'✓' if self.is_active else '✗'})"

@@ -33,6 +33,8 @@ dependencies = [
     "python-dotenv>=1.0,<2",
     # Безопасность: хеширование паролей (SPEC §12.2 — Argon2)
     "argon2-cffi>=23.1,<25",
+    # Web Push (PWA, SPEC §10.4)
+    "pywebpush>=2.0,<3",
     # Очереди/фон (Celery + Redis)
     "celery[redis]>=5.4,<6",
     "redis>=5.0,<6",
@@ -139,7 +141,7 @@ ignore_errors = true
 
 # Сторонние библиотеки без py.typed / стабов — не блокируют проверки.
 [[tool.mypy.overrides]]
-module = ["celery.*", "dj_database_url", "dotenv"]
+module = ["celery.*", "dj_database_url", "dotenv", "pywebpush"]
 ignore_missing_imports = true
 
 # Admin-модули: ModelAdmin/UserAdmin не являются Generic в рантайме Django,
