@@ -408,3 +408,31 @@ class LessonProgress(models.Model):
     def __str__(self) -> str:
         """Урок и статус."""
         return f"{self.lesson} — {'✓' if self.completed else '…'}"
+
+
+class Certificate(models.Model):
+    """Цифровой сертификат о прохождении курса (SPEC §7.4, Фаза 4 #38).
+
+    Создаётся при завершении курса (Enrollment.status=COMPLETED).
+    Содержит уникальный код для верификации и метаданные для PDF-генерации.
+    """
+
+    enrollment = models.OneToOneField(
+        Enrollment,
+        on_delete=models.CASCADE,
+        related_name="certificate",
+        verbose_name=_("Запись на курс"),
+    )
+    code = models.CharField(_("Уникальный код"), max_length=64, unique=True)
+    employee_full_name = models.CharField(_("ФИО сотрудника"), max_length=300)
+    course_title = models.CharField(_("Название курса"), max_length=300)
+    issued_at = models.DateTimeField(_("Выдан"), auto_now_add=True)
+
+    class Meta:
+        verbose_name = _("Сертификат")
+        verbose_name_plural = _("Сертификаты")
+        ordering = ["-issued_at"]
+
+    def __str__(self) -> str:
+        """Код сертификата и курс."""
+        return f"Сертификат {self.code}: {self.course_title}"
