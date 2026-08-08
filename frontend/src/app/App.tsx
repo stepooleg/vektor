@@ -9,13 +9,14 @@ import ruRU from "antd/locale/ru_RU";
 import { useMemo } from "react";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 
+import { AnalyticsPage } from "@/pages/AnalyticsPage";
 import { AssessmentPage } from "@/pages/AssessmentPage";
 import { CompetenciesPage } from "@/pages/CompetenciesPage";
 import { DashboardPage } from "@/pages/DashboardPage";
+import { FeedbackPage } from "@/pages/FeedbackPage";
 import { IdpPage } from "@/pages/IdpPage";
 import { LearningPage } from "@/pages/LearningPage";
 import { LoginPage } from "@/pages/LoginPage";
-import { PlaceholderPage } from "@/pages/PlaceholderPage";
 import { buildAntdConfig } from "./antdTheme";
 import { AppLayout } from "./AppLayout";
 import { AuthProvider } from "./auth";
@@ -34,30 +35,8 @@ function ProtectedRoutes(): React.JSX.Element {
         <Route path="/competencies" element={<CompetenciesPage />} />
         <Route path="/learning" element={<LearningPage />} />
         <Route path="/idp" element={<IdpPage />} />
-        <Route
-          path="/portfolio"
-          element={
-            <PlaceholderPage title="Портфолио" description="Журнал достижений сотрудника." />
-          }
-        />
-        <Route
-          path="/feedback"
-          element={
-            <PlaceholderPage
-              title="Обратная связь"
-              description="Благодарности и запрос обратной связи."
-            />
-          }
-        />
-        <Route
-          path="/analytics"
-          element={
-            <PlaceholderPage
-              title="Аналитика"
-              description="Дашборды по компании, сотрудникам, обучению."
-            />
-          }
-        />
+        <Route path="/feedback" element={<FeedbackPage />} />
+        <Route path="/analytics" element={<AnalyticsPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>
     </Routes>
