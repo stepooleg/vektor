@@ -65,7 +65,9 @@ class FeedbackRequestViewSet(viewsets.ModelViewSet[FeedbackRequest]):
         """Все действия — аутентифицированным."""
         return [IsAuthenticated()]
 
-    def perform_create(self, serializer: FeedbackRequestSerializer) -> None:  # type: ignore[override]
+    def perform_create(  # type: ignore[override]
+        self, serializer: FeedbackRequestSerializer
+    ) -> None:
         """Установить запросчика = текущий сотрудник."""
         employee = _current_employee(self.request.user)
         if employee is not None:
