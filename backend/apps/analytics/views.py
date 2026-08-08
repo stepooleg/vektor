@@ -13,8 +13,9 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.orgstructure.models import Employee
+from apps.users.models import Role
 
-from .services import build_employee_dashboard, can_view_employee_dashboard
+from .services import build_company_dashboard, build_employee_dashboard, can_view_employee_dashboard
 
 
 class EmployeeDashboardView(APIView):
@@ -37,3 +38,23 @@ class EmployeeDashboardView(APIView):
             )
 
         return Response(build_employee_dashboard(target))
+
+
+class CompanyDashboardView(APIView):
+    """``GET /api/v1/analytics/company-dashboard/`` — дашборд компании (§9.1).
+
+    Доступ: HR и руководители. Агрегаты без сырых данных (§6.3).
+    """
+
+    permission_classes = (IsAuthenticated,)
+
+    def get(self, request: Request) -> Response:
+        """Вернуть агрегированный дашборд компании."""
+        user = request.user
+        assert user.pk is not None  # IsAuthenticated гарантирует
+        if not user.has_any_role(Role.Code.HR.value, Role.Code.MANAGER.value):
+            return Response(
+                {"detail": "Дашборд компании доступен HR и руководителям."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        return Response(build_company_dashboard())

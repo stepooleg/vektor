@@ -32,6 +32,8 @@ urlpatterns = [
     path(f"{API_PREFIX}/assessment/", include("apps.assessment.urls")),
     path(f"{API_PREFIX}/notifications/", include("apps.notifications.urls")),
     path(f"{API_PREFIX}/lms/", include("apps.lms.urls")),
+    path(f"{API_PREFIX}/feedback/", include("apps.feedback.urls")),
+    path(f"{API_PREFIX}/portfolio/", include("apps.portfolio.urls")),
     path(f"{API_PREFIX}/analytics/", include("apps.analytics.urls")),
     path(f"{API_PREFIX}/schema/", SpectacularAPIView.as_view(), name="api-schema"),
     path(
