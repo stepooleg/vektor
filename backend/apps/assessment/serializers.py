@@ -48,9 +48,9 @@ class AssessmentCycleSerializer(serializers.ModelSerializer[AssessmentCycle]):
 
     def validate(self, attrs: dict[str, object]) -> dict[str, object]:
         """Проверить сроки и полноту данных мастера."""
-        start_date = attrs.get("start_date")
-        deadline = attrs.get("deadline")
-        if start_date is not None and deadline is not None and deadline < start_date:  # type: ignore[operator]
+        start_date = cast(date | None, attrs.get("start_date"))
+        deadline = cast(date | None, attrs.get("deadline"))
+        if start_date is not None and deadline is not None and deadline < start_date:
             raise serializers.ValidationError({"deadline": "Дедлайн не может быть раньше старта."})
         participant_ids = attrs.get("participant_ids")
         if participant_ids is not None and not participant_ids:
