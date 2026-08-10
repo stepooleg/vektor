@@ -12,16 +12,19 @@ SPEC §17 п.2), активируется флагом ``AUTH_LDAP_ENABLED``.
 from __future__ import annotations
 
 import logging
-from typing import Any
+from typing import Any, cast
 
 from django.conf import settings
 from django.contrib.auth import authenticate, login, logout
 from django.core.cache import cache
+from django.middleware.csrf import get_token
 from rest_framework import status
-from rest_framework.permissions import AllowAny
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
+
+from .models import User
 
 logger = logging.getLogger(__name__)
 
@@ -97,6 +100,7 @@ class LoginView(APIView):
                     "email": user.email,
                     "name": user.get_full_name(),
                 },
+                "csrfToken": get_token(request),
             },
             status=status.HTTP_200_OK,
         )
@@ -110,3 +114,21 @@ class LogoutView(APIView):
         if request.user.is_authenticated:
             logout(request)
         return Response({"detail": "Сессия завершена."}, status=status.HTTP_200_OK)
+
+
+class CurrentUserView(APIView):
+    """``GET /api/v1/auth/me/`` — текущий пользователь серверной сессии."""
+
+    permission_classes = (IsAuthenticated,)
+
+    def get(self, request: Request) -> Response:
+        """Вернуть безопасный минимум данных текущего пользователя."""
+        user = cast(User, request.user)
+        return Response(
+            {
+                "email": user.email,
+                "name": user.get_full_name(),
+                "csrfToken": get_token(request),
+            },
+            status=status.HTTP_200_OK,
+        )

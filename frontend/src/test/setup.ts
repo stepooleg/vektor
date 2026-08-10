@@ -27,3 +27,12 @@ Object.defineProperty(window, "matchMedia", {
     dispatchEvent: vi.fn(),
   })),
 });
+
+// jsdom не поддерживает второй (pseudo-element) аргумент getComputedStyle,
+// который Ant Design использует только для измерения scrollbar.
+const getComputedStyle = window.getComputedStyle.bind(window);
+Object.defineProperty(window, "getComputedStyle", {
+  writable: true,
+  value: (element: Element, pseudoElement?: string | null) =>
+    getComputedStyle(element, pseudoElement ? undefined : pseudoElement),
+});

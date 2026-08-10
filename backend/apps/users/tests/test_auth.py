@@ -12,14 +12,17 @@ from __future__ import annotations
 
 import pytest
 from django.contrib.auth import get_user_model
+from django.test import override_settings
 from rest_framework import status
 from rest_framework.test import APIClient
+
+from apps.users.models import User
 
 UserModel = get_user_model()
 
 
 @pytest.fixture()
-def _user_with_password() -> object:
+def _user_with_password() -> User:
     """Пользователь с разрешённым локальным входом."""
     user = UserModel.objects.create_user(email="alice@corp.local", password="Strong-Pwd-12345")
     user.local_login_enabled = True
@@ -28,7 +31,7 @@ def _user_with_password() -> object:
 
 
 @pytest.mark.django_db
-def test_login_valid_user_returns_session(_user_with_password: object) -> None:
+def test_login_valid_user_returns_session(_user_with_password: User) -> None:
     """Валидный пользователь входит, сессия устанавливается."""
     client = APIClient()
 
@@ -43,7 +46,7 @@ def test_login_valid_user_returns_session(_user_with_password: object) -> None:
 
 
 @pytest.mark.django_db
-def test_login_wrong_password_denied(_user_with_password: object) -> None:
+def test_login_wrong_password_denied(_user_with_password: User) -> None:
     """Неверный пароль → 401, сессия не установлена."""
     client = APIClient()
 
@@ -58,7 +61,7 @@ def test_login_wrong_password_denied(_user_with_password: object) -> None:
 
 
 @pytest.mark.django_db
-def test_login_lockout_after_max_attempts(_user_with_password: object) -> None:
+def test_login_lockout_after_max_attempts(_user_with_password: User) -> None:
     """После N неудачных попыток — lockout (защита от перебора, SPEC §10.2)."""
     client = APIClient()
     payload = {"email": "alice@corp.local", "password": "Wrong-Pwd-99999"}
@@ -82,7 +85,7 @@ def test_login_lockout_after_max_attempts(_user_with_password: object) -> None:
 
 
 @pytest.mark.django_db
-def test_successful_login_resets_failure_counter(_user_with_password: object) -> None:
+def test_successful_login_resets_failure_counter(_user_with_password: User) -> None:
     """Успешный вход сбрасывает счётчик неудач (нет вечного lockout после ошибки)."""
     client = APIClient()
     # Одна неудачная.
@@ -117,7 +120,7 @@ def test_successful_login_resets_failure_counter(_user_with_password: object) ->
 
 
 @pytest.mark.django_db
-def test_logout_clears_session(_user_with_password: object) -> None:
+def test_logout_clears_session(_user_with_password: User) -> None:
     """Logout завершает сессию."""
     client = APIClient()
     client.post(
@@ -129,3 +132,49 @@ def test_logout_clears_session(_user_with_password: object) -> None:
     response = client.post("/api/v1/auth/logout/")
 
     assert response.status_code == status.HTTP_200_OK
+
+
+@pytest.mark.django_db
+@override_settings(CSRF_TRUSTED_ORIGINS=["http://localhost:8080"])
+def test_logout_accepts_csrf_token_issued_on_login(_user_with_password: User) -> None:
+    """Browser-клиент получает CSRF cookie и может безопасно завершить сессию."""
+    client = APIClient(enforce_csrf_checks=True)
+    login_response = client.post(
+        "/api/v1/auth/login/",
+        {"email": "alice@corp.local", "password": "Strong-Pwd-12345"},
+        format="json",
+    )
+
+    csrf_token = login_response.json()["csrfToken"]
+    response = client.post(
+        "/api/v1/auth/logout/",
+        HTTP_X_CSRFTOKEN=csrf_token,
+        HTTP_ORIGIN="http://localhost:8080",
+    )
+
+    assert response.status_code == status.HTTP_200_OK
+    assert client.get("/api/v1/auth/me/").status_code == status.HTTP_403_FORBIDDEN
+
+
+@pytest.mark.django_db
+def test_me_returns_current_user(_user_with_password: User) -> None:
+    """Действующая сессия возвращает текущего пользователя для frontend."""
+    client = APIClient()
+    client.force_authenticate(user=_user_with_password)
+
+    response = client.get("/api/v1/auth/me/")
+
+    assert response.status_code == status.HTTP_200_OK
+    assert response.json() == {
+        "email": "alice@corp.local",
+        "name": "",
+        "csrfToken": response.json()["csrfToken"],
+    }
+
+
+@pytest.mark.django_db
+def test_me_denies_anonymous_user() -> None:
+    """Без действующей сессии endpoint текущего пользователя возвращает 403."""
+    response = APIClient().get("/api/v1/auth/me/")
+
+    assert response.status_code == status.HTTP_403_FORBIDDEN

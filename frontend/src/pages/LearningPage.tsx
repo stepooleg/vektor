@@ -96,7 +96,7 @@ export function LearningPage(): React.JSX.Element {
           <Row gutter={[16, 16]}>
             {courses.map((course) => (
               <Col xs={24} sm={12} lg={8} key={course.id}>
-                <Card hoverable title={course.title} bordered style={{ height: "100%" }}>
+                <Card hoverable title={course.title} variant="outlined" style={{ height: "100%" }}>
                   <p>
                     <Text type="secondary" ellipsis>
                       {course.description || "Без описания"}

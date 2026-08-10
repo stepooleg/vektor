@@ -22,6 +22,8 @@ body,
 #root {
   height: 100%;
   margin: 0;
+  max-width: 100%;
+  overflow-x: hidden;
 }
 
 body {
@@ -62,8 +64,37 @@ table,
 }
 
 .vektor-content {
+  min-width: 0;
   padding: 24px;
   background-color: var(--bg-base);
+}
+
+@media (max-width: 767px) {
+  .vektor-header {
+    gap: 8px;
+    padding-inline: 8px;
+  }
+
+  .vektor-header .vektor-logo > span {
+    display: none;
+  }
+
+  .vektor-header .ant-space {
+    min-width: 0;
+  }
+
+  .vektor-header .ant-segmented-item-label {
+    padding-inline: 6px;
+  }
+
+  .vektor-content {
+    padding: 16px;
+    overflow-x: hidden;
+  }
+
+  .ant-layout .ant-layout-sider-zero-width-trigger {
+    top: 4px;
+  }
 }
 
 /* Боковое меню: прозрачный фон, акцент активного пункта — Primary (BRANDBOOK §6.7). */

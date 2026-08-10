@@ -13,11 +13,13 @@ import {
   FileTextOutlined,
   HeartOutlined,
   LogoutOutlined,
+  MenuFoldOutlined,
+  MenuUnfoldOutlined,
   SolutionOutlined,
   TrophyOutlined,
 } from "@ant-design/icons";
 import { App, Avatar, Button, Dropdown, Layout, Menu, Segmented, Space } from "antd";
-import { useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Link, Outlet, useLocation } from "react-router-dom";
 
 import { Logo } from "@/components/Logo";
@@ -65,6 +67,18 @@ export function AppLayout({
   const { user, signOut } = useAuth();
   const { message } = App.useApp();
   const [collapsed, setCollapsed] = useState(false);
+  const navigationToggleRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    const collapseOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && !collapsed) {
+        setCollapsed(true);
+        navigationToggleRef.current?.focus();
+      }
+    };
+    document.addEventListener("keydown", collapseOnEscape);
+    return () => document.removeEventListener("keydown", collapseOnEscape);
+  }, [collapsed]);
 
   // Активный пункт — по совпадению начала пути.
   const selectedKey =
@@ -78,8 +92,12 @@ export function AppLayout({
         icon: <LogoutOutlined />,
         label: "Выйти",
         onClick: async () => {
-          await signOut();
-          message.info("Сессия завершена");
+          try {
+            await signOut();
+            message.info("Сессия завершена");
+          } catch {
+            message.error("Не удалось завершить сессию. Попробуйте ещё раз.");
+          }
         },
       },
     ],
@@ -91,6 +109,15 @@ export function AppLayout({
       <Header className="vektor-header">
         <Logo />
         <Space>
+          <Button
+            ref={navigationToggleRef}
+            type="text"
+            icon={collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
+            aria-label={collapsed ? "Развернуть навигацию" : "Свернуть навигацию"}
+            aria-expanded={!collapsed}
+            aria-controls="primary-navigation"
+            onClick={() => setCollapsed((value) => !value)}
+          />
           <Segmented
             aria-label="Тема оформления"
             size="small"
@@ -99,7 +126,7 @@ export function AppLayout({
             options={THEME_OPTIONS}
           />
           <Dropdown menu={userMenu} placement="bottomRight">
-            <Button type="text" style={{ padding: 4 }}>
+            <Button type="text" aria-label="Открыть меню профиля" style={{ padding: 4 }}>
               <Avatar style={{ backgroundColor: "var(--color-primary)" }}>{avatarLetter}</Avatar>
             </Button>
           </Dropdown>
@@ -107,7 +134,10 @@ export function AppLayout({
       </Header>
       <Layout>
         <Sider
-          collapsible
+          id="primary-navigation"
+          breakpoint="md"
+          collapsedWidth={0}
+          collapsible={false}
           collapsed={collapsed}
           onCollapse={setCollapsed}
           theme="light"

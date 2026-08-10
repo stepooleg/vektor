@@ -67,12 +67,12 @@ export function DashboardPage(): React.JSX.Element {
         {dashboard ? (
           <Row gutter={[16, 16]}>
             <Col xs={24} lg={12}>
-              <Card title="Профиль компетенций" bordered>
+              <Card title="Профиль компетенций" variant="outlined">
                 <CompetencyRadar profile={dashboard.competency_profile} />
               </Card>
             </Col>
             <Col xs={24} lg={12}>
-              <Card title={dashboard.employee.full_name || "Сотрудник"} bordered>
+              <Card title={dashboard.employee.full_name || "Сотрудник"} variant="outlined">
                 <p>
                   <Text type="secondary">Подразделение: </Text>
                   <Text>{dashboard.employee.department || "—"}</Text>

@@ -30,14 +30,16 @@ services:
     # Vite dev server с HMR; override прод-target на builder-фазу через command.
     build:
       target: builder
-    command: ["npm", "run", "dev", "--", "--host", "0.0.0.0"]
+    # Nginx в общей конфигурации обращается к frontend:80. В dev Vite также
+    # слушает этот container-port, а наружу по-прежнему публикуется :5173.
+    command: ["npm", "run", "dev", "--", "--host", "0.0.0.0", "--port", "80"]
     volumes:
       - ./frontend:/app
       - /app/node_modules
     environment:
       VITE_API_PROXY: http://backend:8000
     ports:
-      - "${FRONTEND_PORT_HOST:-5173}:5173"
+      - "${FRONTEND_PORT_HOST:-5173}:80"
 
   nginx:
     # В dev Nginx опционален (можно ходить напрямую на порты выше);
