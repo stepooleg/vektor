@@ -4,12 +4,13 @@
  * Связывает провайдеры (тема, AntD ConfigProvider, аутентификация), роутер,
  * защищённые маршруты (AppLayout). Все цвета — только дизайн-токены (§10.2).
  */
-import { ConfigProvider, App as AntdApp, Spin } from "antd";
+import { ConfigProvider, App as AntdApp, Result, Spin } from "antd";
 import ruRU from "antd/locale/ru_RU";
 import { lazy, Suspense, useMemo } from "react";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 
 import { LoginPage } from "@/pages/LoginPage";
+import type { RoleCode } from "@/api/auth";
 import { buildAntdConfig } from "./antdTheme";
 import { AppLayout } from "./AppLayout";
 import { AuthProvider } from "./auth";
@@ -43,6 +44,23 @@ interface ProtectedRoutesProps {
   onThemeChange: (mode: ThemeMode) => void;
 }
 
+function RequireRoles({
+  allowed,
+  children,
+}: {
+  allowed: RoleCode[];
+  children: React.ReactNode;
+}): React.JSX.Element {
+  const { user } = useAuth();
+  const hasAccess = allowed.some((role) => user?.roles.includes(role));
+  if (!hasAccess) {
+    return (
+      <Result status="403" title="Нет доступа" subTitle="Этот раздел недоступен для вашей роли." />
+    );
+  }
+  return <>{children}</>;
+}
+
 /** Защищённые маршруты приложения (после входа). */
 export function ProtectedRoutes({
   themeMode,
@@ -54,12 +72,26 @@ export function ProtectedRoutes({
         <Route element={<AppLayout themeMode={themeMode} onThemeChange={onThemeChange} />}>
           <Route path="/" element={<DashboardPage />} />
           <Route path="/assessment" element={<AssessmentPage />} />
-          <Route path="/competencies" element={<CompetenciesPage />} />
+          <Route
+            path="/competencies"
+            element={
+              <RequireRoles allowed={["hr", "methodologist"]}>
+                <CompetenciesPage />
+              </RequireRoles>
+            }
+          />
           <Route path="/learning" element={<LearningPage />} />
           <Route path="/idp" element={<IdpPage />} />
           <Route path="/portfolio" element={<FeedbackPage />} />
           <Route path="/feedback" element={<FeedbackPage />} />
-          <Route path="/analytics" element={<AnalyticsPage />} />
+          <Route
+            path="/analytics"
+            element={
+              <RequireRoles allowed={["hr", "manager"]}>
+                <AnalyticsPage />
+              </RequireRoles>
+            }
+          />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Route>
       </Routes>

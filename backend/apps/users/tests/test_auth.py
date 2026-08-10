@@ -16,7 +16,8 @@ from django.test import override_settings
 from rest_framework import status
 from rest_framework.test import APIClient
 
-from apps.users.models import User
+from apps.orgstructure.models import Department, Employee, Position
+from apps.users.models import Role, User
 
 UserModel = get_user_model()
 
@@ -168,8 +169,38 @@ def test_me_returns_current_user(_user_with_password: User) -> None:
     assert response.json() == {
         "email": "alice@corp.local",
         "name": "",
+        "employee_id": None,
+        "roles": [],
         "csrfToken": response.json()["csrfToken"],
     }
+
+
+@pytest.mark.django_db
+def test_me_returns_safe_employee_context_and_role_codes(_user_with_password: User) -> None:
+    """Frontend получает только ID сотрудника и стабильные коды составных ролей."""
+    department = Department.objects.create(code_1c="D-AUTH", name="Отдел")
+    position = Position.objects.create(code_1c="P-AUTH", name="Должность")
+    employee = Employee.objects.create(
+        code_1c="E-AUTH",
+        user=_user_with_password,
+        last_name="Иванова",
+        first_name="Алиса",
+        department=department,
+        position=position,
+    )
+    roles = [
+        Role.objects.create(code=Role.Code.MANAGER, name="Руководитель"),
+        Role.objects.create(code=Role.Code.EMPLOYEE, name="Сотрудник"),
+    ]
+    _user_with_password.roles.add(*roles)
+    client = APIClient()
+    client.force_authenticate(user=_user_with_password)
+
+    response = client.get("/api/v1/auth/me/")
+
+    assert response.status_code == status.HTTP_200_OK
+    assert response.json()["employee_id"] == employee.id
+    assert response.json()["roles"] == ["employee", "manager"]
 
 
 @pytest.mark.django_db
