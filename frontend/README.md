@@ -23,6 +23,7 @@ npm run dev            # http://localhost:5173 (проксирует /api → :8
 | `npm run preview`      | локальный предпросмотр сборки        |
 | `npm test`             | Vitest (однократный прогон)          |
 | `npm run test:watch`   | Vitest в режиме watch                |
+| `npm run test:e2e`     | Playwright E2E в Chromium            |
 | `npm run lint`         | ESLint                               |
 | `npm run typecheck`    | `tsc --noEmit` (strict)              |
 | `npm run format`       | Prettier (запись)                    |
@@ -36,10 +37,15 @@ src/
 ├── pages/      # экраны (по SPEC §14)
 ├── components/ # переиспользуемые UI-компоненты
 ├── api/        # клиент к DRF (позже)
+├── features/   # составные пользовательские сценарии доменов
 ├── styles/     # дизайн-токены (tokens.css), глобальные стили
 ├── test/       # настройка Vitest + Testing Library
 └── utils/
 ```
+
+Перед первым локальным E2E-прогоном установите браузер: `npx playwright install chromium`.
+Playwright запускает Vite на `http://127.0.0.1:4173`; тестовые API-ответы изолированно
+мокаются в browser-сценариях.
 
 ## Темизация
 

@@ -11,14 +11,19 @@ test_anonymity). Сырые ответы НЕ возвращаются публ�
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from datetime import date
+from typing import TYPE_CHECKING, NotRequired, TypedDict
 
 from django.db import transaction
+from django.db.models import QuerySet
 from django.utils import timezone
 
+from apps.competencies.models import CompetencyFramework
 from apps.orgstructure.models import Employee
+from apps.users.models import User
 
 from .models import (
+    AssessmentComment,
     AssessmentCycle,
     AssessmentResponse,
     Participant,
@@ -33,6 +38,125 @@ if TYPE_CHECKING:
 
 class CycleTransitionError(ValueError):
     """Нарушение правил жизненного цикла цикла."""
+
+
+def eligible_participants_for_user(user: User) -> QuerySet[Employee]:
+    """Вернуть доступных участников без раскрытия чужой оргструктуры."""
+    eligible = Employee.objects.filter(is_active=True, assessment_eligible=True)
+    if user.has_any_role("hr"):
+        return eligible
+    manager = Employee.objects.filter(user=user).first()
+    if manager is None or not user.has_any_role("manager"):
+        return Employee.objects.none()
+    subordinate_ids = manager.get_subordinates().values_list("id", flat=True)
+    return eligible.filter(id__in=subordinate_ids)
+
+
+@dataclass(frozen=True)
+class CycleCreationData:
+    """Проверенные поля создаваемого цикла."""
+
+    name: str
+    framework: CompetencyFramework | None = None
+    anonymity_threshold: int = 3
+    start_date: date | None = None
+    deadline: date | None = None
+
+
+class AssignmentResponseInput(TypedDict):
+    """Проверенный ответ по одной компетенции."""
+
+    competency_id: int
+    score: int
+    comment: NotRequired[str]
+
+
+@transaction.atomic
+def create_cycle_with_participants(
+    *,
+    data: CycleCreationData,
+    creator: User,
+    participant_ids: list[int],
+) -> AssessmentCycle:
+    """Создать цикл и атомарно сформировать назначения выбранным участникам."""
+    allowed = eligible_participants_for_user(creator)
+    participants = list(allowed.filter(id__in=participant_ids).select_related("manager"))
+    if len(participants) != len(set(participant_ids)):
+        msg = "Выбраны недоступные сотрудники или сотрудники, не участвующие в оценке."
+        raise CycleTransitionError(msg)
+    if any(employee.manager_id is None for employee in participants):
+        msg = "Для каждого участника должен быть назначен непосредственный руководитель."
+        raise CycleTransitionError(msg)
+
+    cycle = AssessmentCycle.objects.create(
+        name=data.name,
+        framework=data.framework,
+        anonymity_threshold=data.anonymity_threshold,
+        start_date=data.start_date,
+        deadline=data.deadline,
+        created_by=creator,
+    )
+    for employee in participants:
+        participant = Participant.objects.create(cycle=cycle, employee=employee)
+        auto_assign_reviewers(participant)
+    if participants:
+        transition_cycle(cycle, AssessmentCycle.Status.ASSIGNED)
+    return cycle
+
+
+@transaction.atomic
+def submit_assignment(
+    assignment: ReviewerAssignment,
+    *,
+    responses: list[AssignmentResponseInput],
+    general_comment: str,
+) -> None:
+    """Сохранить полный опросник один раз, не возвращая сырые ответы наружу."""
+    if assignment.completed:
+        msg = "Оценка уже отправлена."
+        raise CycleTransitionError(msg)
+    if assignment.cycle.status != AssessmentCycle.Status.IN_PROGRESS.value:
+        msg = "Ответы принимаются только в активном цикле."
+        raise CycleTransitionError(msg)
+    framework = assignment.cycle.framework
+    if framework is None:
+        msg = "Для цикла не выбрана модель компетенций."
+        raise CycleTransitionError(msg)
+
+    competencies = {
+        competency.id: competency
+        for competency in framework.competencies.select_related("scale").all()
+    }
+    response_ids = [item["competency_id"] for item in responses]
+    if len(response_ids) != len(set(response_ids)) or set(response_ids) != set(competencies):
+        msg = "Нужно оценить каждую компетенцию ровно один раз."
+        raise CycleTransitionError(msg)
+
+    for item in responses:
+        competency = competencies[item["competency_id"]]
+        score = item["score"]
+        if not competency.scale.contains(score):
+            msg = f"Оценка компетенции «{competency.name}» вне допустимой шкалы."
+            raise CycleTransitionError(msg)
+        AssessmentResponse.objects.create(
+            assignment=assignment,
+            competency=competency,
+            score=score,
+        )
+        comment = str(item.get("comment", "")).strip()
+        if comment:
+            AssessmentComment.objects.create(
+                assignment=assignment,
+                competency=competency,
+                text=comment,
+            )
+    if general_comment.strip():
+        AssessmentComment.objects.create(
+            assignment=assignment,
+            text=general_comment.strip(),
+            is_general=True,
+        )
+    mark_assignment_completed(assignment)
 
 
 # Допустимые переходы статусов (SPEC §5.2). Ключ — текущий статус,
