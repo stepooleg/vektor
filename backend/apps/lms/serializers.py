@@ -6,7 +6,54 @@ from rest_framework import serializers
 
 from apps.competencies.models import Competency
 
-from .models import Category, Course, CourseCompetencyLink
+from .models import (
+    AnswerOption,
+    Category,
+    Certificate,
+    Course,
+    CourseCompetencyLink,
+    Enrollment,
+    Lesson,
+    LessonProgress,
+    Question,
+)
+
+
+class AnswerOptionSerializer(serializers.ModelSerializer[AnswerOption]):
+    """Безопасное представление варианта без признака правильности."""
+
+    class Meta:
+        model = AnswerOption
+        fields = ["id", "text", "order"]
+
+
+class QuestionSerializer(serializers.ModelSerializer[Question]):
+    """Вопрос теста для слушателя."""
+
+    options = AnswerOptionSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = Question
+        fields = ["id", "text", "type", "order", "options"]
+
+
+class LessonSerializer(serializers.ModelSerializer[Lesson]):
+    """Материал программы курса."""
+
+    questions = QuestionSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = Lesson
+        fields = [
+            "id",
+            "title",
+            "type",
+            "order",
+            "content",
+            "pass_score",
+            "max_attempts",
+            "questions",
+        ]
 
 
 class CategorySerializer(serializers.ModelSerializer[Category]):
@@ -41,6 +88,7 @@ class CourseSerializer(serializers.ModelSerializer[Course]):
         write_only=True,
         required=False,
     )
+    lessons = LessonSerializer(many=True, read_only=True)
 
     class Meta:
         """Метаданные сериалайзера курса."""
@@ -56,5 +104,51 @@ class CourseSerializer(serializers.ModelSerializer[Course]):
             "pass_threshold",
             "created_at",
             "competencies",
+            "lessons",
         ]
         read_only_fields = ["created_at"]
+
+
+class CourseSummarySerializer(serializers.ModelSerializer[Course]):
+    """Краткие данные курса для личного кабинета."""
+
+    class Meta:
+        model = Course
+        fields = ["id", "title", "description", "is_mandatory", "pass_threshold"]
+
+
+class LessonProgressSerializer(serializers.ModelSerializer[LessonProgress]):
+    """Статус прохождения отдельного урока."""
+
+    class Meta:
+        model = LessonProgress
+        fields = ["lesson", "completed", "best_score", "attempts_used"]
+
+
+class CertificateSerializer(serializers.ModelSerializer[Certificate]):
+    """Статус-сертификат завершённого курса."""
+
+    class Meta:
+        model = Certificate
+        fields = ["code", "employee_full_name", "course_title", "issued_at"]
+
+
+class EnrollmentSerializer(serializers.ModelSerializer[Enrollment]):
+    """Запись на курс с прогрессом и сертификатом."""
+
+    course = CourseSummarySerializer(read_only=True)
+    lesson_progresses = LessonProgressSerializer(many=True, read_only=True)
+    certificate = CertificateSerializer(read_only=True)
+
+    class Meta:
+        model = Enrollment
+        fields = [
+            "id",
+            "course",
+            "status",
+            "progress_percent",
+            "enrolled_at",
+            "completed_at",
+            "lesson_progresses",
+            "certificate",
+        ]

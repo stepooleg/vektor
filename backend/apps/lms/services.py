@@ -241,6 +241,9 @@ def recalculate_progress(enrollment: Enrollment) -> Enrollment:
 
     if just_completed:
         _record_course_to_portfolio(enrollment)
+        from .certificate import issue_certificate
+
+        issue_certificate(enrollment)
 
     return enrollment
 

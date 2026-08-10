@@ -398,6 +398,7 @@ class LessonProgress(models.Model):
     completed = models.BooleanField(_("Пройден"), default=False)
     # Лучший результат теста (для quiz-уроков, %).
     best_score = models.PositiveSmallIntegerField(default=0)
+    attempts_used = models.PositiveSmallIntegerField(_("Использовано попыток"), default=0)
     updated_at = models.DateTimeField(_("Обновлён"), auto_now=True)
 
     class Meta:

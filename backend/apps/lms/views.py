@@ -11,15 +11,33 @@
 
 from __future__ import annotations
 
+from django.shortcuts import get_object_or_404
 from django_filters import rest_framework as filters
-from rest_framework import viewsets
+from rest_framework import status, viewsets
+from rest_framework.decorators import action
+from rest_framework.exceptions import NotFound, ValidationError
 from rest_framework.filters import OrderingFilter, SearchFilter
+from rest_framework.request import Request
+from rest_framework.response import Response
 
+from apps.orgstructure.models import Employee
 from apps.users.models import Role
 from apps.users.permissions import IsAuthenticatedUser, IsMethodologist
 
-from .models import Category, Course
-from .serializers import CategorySerializer, CourseSerializer
+from .models import Category, Course, Enrollment, Lesson, LessonProgress
+from .serializers import CategorySerializer, CourseSerializer, EnrollmentSerializer
+from .services import check_attempt_allowed, grade_quiz, mark_lesson_completed
+
+
+def _current_employee(request: Request) -> Employee:
+    """Вернуть профиль сотрудника текущего пользователя."""
+    user_id = getattr(request.user, "pk", None)
+    if user_id is None:
+        raise NotFound("Профиль сотрудника не найден.")
+    employee = Employee.objects.filter(user_id=user_id).first()
+    if employee is None:
+        raise NotFound("Профиль сотрудника не найден.")
+    return employee
 
 
 class CourseFilter(filters.FilterSet):
@@ -59,7 +77,11 @@ class CourseViewSet(viewsets.ModelViewSet[Course]):
 
     def get_queryset(self):  # type: ignore[no-untyped-def]
         """Сотрудник видит только опубликованные; Методолог/HR — все."""
-        qs = Course.objects.select_related("category").distinct()
+        qs = (
+            Course.objects.select_related("category")
+            .prefetch_related("lessons__questions__options")
+            .distinct()
+        )
         user = self.request.user
         is_staff = getattr(user, "is_authenticated", False)
         if is_staff and user.has_any_role(  # type: ignore[union-attr]
@@ -74,3 +96,97 @@ class CourseViewSet(viewsets.ModelViewSet[Course]):
         if self.action in {"create", "update", "partial_update", "destroy"}:
             return [IsMethodologist()]
         return [IsAuthenticatedUser()]
+
+    @action(detail=False, methods=["get"], url_path="my")
+    def my_learning(self, request: Request) -> Response:
+        """Вернуть курсы и прогресс текущего сотрудника."""
+        employee = _current_employee(request)
+        enrollments = (
+            Enrollment.objects.filter(employee=employee)
+            .select_related("course", "certificate")
+            .prefetch_related("lesson_progresses")
+        )
+        return Response(EnrollmentSerializer(enrollments, many=True).data)
+
+    @action(detail=True, methods=["post"])
+    def enroll(self, request: Request, pk: str | None = None) -> Response:
+        """Идемпотентно записать сотрудника на опубликованный курс."""
+        course = self.get_object()
+        if not course.is_available:
+            raise ValidationError("Записаться можно только на опубликованный курс.")
+        enrollment, created = Enrollment.objects.get_or_create(
+            course=course,
+            employee=_current_employee(request),
+        )
+        response_status = status.HTTP_201_CREATED if created else status.HTTP_200_OK
+        return Response(EnrollmentSerializer(enrollment).data, status=response_status)
+
+    def _enrollment_for_lesson(
+        self, request: Request, course: Course, lesson_id: str
+    ) -> tuple[Enrollment, Lesson]:
+        """Проверить принадлежность урока и наличие записи на курс."""
+        lesson = get_object_or_404(Lesson, pk=lesson_id, course=course)
+        enrollment = get_object_or_404(
+            Enrollment,
+            course=course,
+            employee=_current_employee(request),
+        )
+        return enrollment, lesson
+
+    @action(
+        detail=True,
+        methods=["post"],
+        url_path=r"lessons/(?P<lesson_id>[^/.]+)/complete",
+    )
+    def complete_lesson(
+        self, request: Request, pk: str | None = None, lesson_id: str = ""
+    ) -> Response:
+        """Отметить текстовый материал прочитанным."""
+        enrollment, lesson = self._enrollment_for_lesson(request, self.get_object(), lesson_id)
+        if lesson.type != Lesson.Type.TEXT.value:
+            raise ValidationError("Тест завершается только после успешной проверки ответов.")
+        mark_lesson_completed(enrollment, lesson)
+        enrollment.refresh_from_db()
+        return Response(EnrollmentSerializer(enrollment).data)
+
+    @action(
+        detail=True,
+        methods=["post"],
+        url_path=r"lessons/(?P<lesson_id>[^/.]+)/submit-quiz",
+    )
+    def submit_quiz(self, request: Request, pk: str | None = None, lesson_id: str = "") -> Response:
+        """Проверить ответы теста и обновить прогресс при успехе."""
+        enrollment, lesson = self._enrollment_for_lesson(request, self.get_object(), lesson_id)
+        if lesson.type != Lesson.Type.QUIZ.value:
+            raise ValidationError("Этот урок не является тестом.")
+        raw_answers = request.data.get("answers")
+        if not isinstance(raw_answers, dict):
+            raise ValidationError({"answers": "Передайте ответы по вопросам."})
+        try:
+            answers = {
+                int(question_id): [int(option_id) for option_id in option_ids]
+                for question_id, option_ids in raw_answers.items()
+                if isinstance(option_ids, list)
+            }
+        except (TypeError, ValueError) as error:
+            raise ValidationError({"answers": "Некорректный формат ответов."}) from error
+
+        result = grade_quiz(lesson, answers)
+        progress, _ = LessonProgress.objects.get_or_create(
+            enrollment=enrollment,
+            lesson=lesson,
+        )
+        if not check_attempt_allowed(lesson, attempts_used=progress.attempts_used):
+            raise ValidationError("Лимит попыток теста исчерпан.")
+        progress.attempts_used += 1
+        progress.best_score = max(progress.best_score, result.percent)
+        progress.save(update_fields=["attempts_used", "best_score", "updated_at"])
+        if result.passed:
+            mark_lesson_completed(enrollment, lesson)
+        enrollment.refresh_from_db()
+        return Response(
+            {
+                "result": {"percent": result.percent, "passed": result.passed},
+                "enrollment": EnrollmentSerializer(enrollment).data,
+            }
+        )
