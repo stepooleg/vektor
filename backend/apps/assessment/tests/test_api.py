@@ -81,11 +81,11 @@ def test_employee_cannot_create_cycle() -> None:
 
 
 @pytest.mark.django_db
-def test_authenticated_can_list_cycles() -> None:
-    """Аутентифицированный пользователь видит список циклов."""
+def test_hr_can_list_all_cycles() -> None:
+    """HR видит общий список циклов."""
     AssessmentCycle.objects.create(name="Цикл 1")
     AssessmentCycle.objects.create(name="Цикл 2")
-    user = _user("u@corp.local", Role.Code.EMPLOYEE.value)
+    user = _user("hr-list@corp.local", Role.Code.HR.value)
     client = APIClient()
     client.force_authenticate(user=user)
 
@@ -93,6 +93,20 @@ def test_authenticated_can_list_cycles() -> None:
 
     assert response.status_code == status.HTTP_200_OK
     assert response.data["count"] >= 2
+
+
+@pytest.mark.django_db
+def test_employee_cannot_list_management_cycles() -> None:
+    """Сотрудник работает через свои задания и не получает управленческий список."""
+    AssessmentCycle.objects.create(name="Чужой цикл")
+    user = _user("employee-list@corp.local", Role.Code.EMPLOYEE.value)
+    client = APIClient()
+    client.force_authenticate(user=user)
+
+    response = client.get("/api/v1/assessment/cycles/")
+
+    assert response.status_code == status.HTTP_200_OK
+    assert response.data["count"] == 0
 
 
 @pytest.mark.django_db
