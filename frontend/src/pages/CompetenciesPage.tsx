@@ -59,7 +59,7 @@ export function CompetenciesPage(): React.JSX.Element {
           <Row gutter={[16, 16]} style={{ marginTop: 16 }}>
             {groups.map((group) => (
               <Col xs={24} md={12} key={group.id}>
-                <Card title={group.name} bordered>
+                <Card title={group.name} variant="outlined">
                   {competencies
                     .filter((c) => c.group === group.id)
                     .map((c) => (

@@ -4,18 +4,11 @@
  * Связывает провайдеры (тема, AntD ConfigProvider, аутентификация), роутер,
  * защищённые маршруты (AppLayout). Все цвета — только дизайн-токены (§10.2).
  */
-import { ConfigProvider, App as AntdApp } from "antd";
+import { ConfigProvider, App as AntdApp, Spin } from "antd";
 import ruRU from "antd/locale/ru_RU";
-import { useMemo } from "react";
+import { lazy, Suspense, useMemo } from "react";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 
-import { AnalyticsPage } from "@/pages/AnalyticsPage";
-import { AssessmentPage } from "@/pages/AssessmentPage";
-import { CompetenciesPage } from "@/pages/CompetenciesPage";
-import { DashboardPage } from "@/pages/DashboardPage";
-import { FeedbackPage } from "@/pages/FeedbackPage";
-import { IdpPage } from "@/pages/IdpPage";
-import { LearningPage } from "@/pages/LearningPage";
 import { LoginPage } from "@/pages/LoginPage";
 import { buildAntdConfig } from "./antdTheme";
 import { AppLayout } from "./AppLayout";
@@ -23,36 +16,84 @@ import { AuthProvider } from "./auth";
 import { useAuth } from "./auth-context";
 import { ThemeMode, useTheme } from "./theme";
 
-/** Защищённые маршруты приложения (после входа). */
-function ProtectedRoutes(): React.JSX.Element {
-  const { mode, setMode } = useTheme();
+const DashboardPage = lazy(() =>
+  import("@/pages/DashboardPage").then((module) => ({ default: module.DashboardPage })),
+);
+const AssessmentPage = lazy(() =>
+  import("@/pages/AssessmentPage").then((module) => ({ default: module.AssessmentPage })),
+);
+const CompetenciesPage = lazy(() =>
+  import("@/pages/CompetenciesPage").then((module) => ({ default: module.CompetenciesPage })),
+);
+const LearningPage = lazy(() =>
+  import("@/pages/LearningPage").then((module) => ({ default: module.LearningPage })),
+);
+const IdpPage = lazy(() =>
+  import("@/pages/IdpPage").then((module) => ({ default: module.IdpPage })),
+);
+const FeedbackPage = lazy(() =>
+  import("@/pages/FeedbackPage").then((module) => ({ default: module.FeedbackPage })),
+);
+const AnalyticsPage = lazy(() =>
+  import("@/pages/AnalyticsPage").then((module) => ({ default: module.AnalyticsPage })),
+);
 
+interface ProtectedRoutesProps {
+  themeMode: ThemeMode;
+  onThemeChange: (mode: ThemeMode) => void;
+}
+
+/** Защищённые маршруты приложения (после входа). */
+export function ProtectedRoutes({
+  themeMode,
+  onThemeChange,
+}: ProtectedRoutesProps): React.JSX.Element {
   return (
-    <Routes>
-      <Route element={<AppLayout themeMode={mode} onThemeChange={setMode} />}>
-        <Route path="/" element={<DashboardPage />} />
-        <Route path="/assessment" element={<AssessmentPage />} />
-        <Route path="/competencies" element={<CompetenciesPage />} />
-        <Route path="/learning" element={<LearningPage />} />
-        <Route path="/idp" element={<IdpPage />} />
-        <Route path="/feedback" element={<FeedbackPage />} />
-        <Route path="/analytics" element={<AnalyticsPage />} />
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Route>
-    </Routes>
+    <Suspense fallback={<Spin size="large" aria-label="Загрузка раздела" />}>
+      <Routes>
+        <Route element={<AppLayout themeMode={themeMode} onThemeChange={onThemeChange} />}>
+          <Route path="/" element={<DashboardPage />} />
+          <Route path="/assessment" element={<AssessmentPage />} />
+          <Route path="/competencies" element={<CompetenciesPage />} />
+          <Route path="/learning" element={<LearningPage />} />
+          <Route path="/idp" element={<IdpPage />} />
+          <Route path="/portfolio" element={<FeedbackPage />} />
+          <Route path="/feedback" element={<FeedbackPage />} />
+          <Route path="/analytics" element={<AnalyticsPage />} />
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Route>
+      </Routes>
+    </Suspense>
   );
 }
 
 /** Решает, что показать: страницу входа или защищённое приложение. */
 function Root(): React.JSX.Element {
-  const { user } = useAuth();
-  const { resolved } = useTheme();
+  const { user, loading } = useAuth();
+  const { mode, resolved, setMode } = useTheme();
   const antdConfig = useMemo(() => buildAntdConfig(resolved === ThemeMode.Dark), [resolved]);
 
   return (
     <ConfigProvider theme={antdConfig} locale={ruRU}>
       <AntdApp>
-        <BrowserRouter>{user ? <ProtectedRoutes /> : <LoginPage />}</BrowserRouter>
+        <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+          {loading ? (
+            <div
+              style={{
+                minHeight: "100vh",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              <Spin size="large" aria-label="Загрузка сессии" />
+            </div>
+          ) : user ? (
+            <ProtectedRoutes themeMode={mode} onThemeChange={setMode} />
+          ) : (
+            <LoginPage />
+          )}
+        </BrowserRouter>
       </AntdApp>
     </ConfigProvider>
   );

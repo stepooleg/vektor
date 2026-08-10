@@ -9,8 +9,10 @@ import { LockOutlined, MailOutlined } from "@ant-design/icons";
 import { Alert, App, Button, Card, Form, Input, Typography, type FormProps } from "antd";
 import { useState } from "react";
 
+import { toApiError } from "@/api/client";
 import { Logo } from "@/components/Logo";
 import { useAuth } from "@/app/auth-context";
+import { getLoginErrorMessage } from "./login-error";
 
 const { Title, Text } = Typography;
 
@@ -28,8 +30,8 @@ export function LoginPage(): React.JSX.Element {
     try {
       await signIn(values.email, values.password);
       message.success("Вход выполнен");
-    } catch {
-      setFormError("Неверный email или пароль. Проверьте данные и попробуйте снова.");
+    } catch (error) {
+      setFormError(getLoginErrorMessage(toApiError(error)));
     } finally {
       setSubmitting(false);
     }

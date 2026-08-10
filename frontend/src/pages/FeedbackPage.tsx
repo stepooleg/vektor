@@ -55,7 +55,7 @@ export function FeedbackPage(): React.JSX.Element {
       <Spin spinning={loading}>
         <Row gutter={[16, 16]} style={{ marginTop: 16 }}>
           <Col xs={24} lg={12}>
-            <Card title="Лента благодарностей" bordered>
+            <Card title="Лента благодарностей" variant="outlined">
               {praises.length === 0 ? (
                 <Empty description="Пока нет благодарностей" />
               ) : (
@@ -77,7 +77,7 @@ export function FeedbackPage(): React.JSX.Element {
             </Card>
           </Col>
           <Col xs={24} lg={12}>
-            <Card title="Портфолио" bordered>
+            <Card title="Портфолио" variant="outlined">
               {portfolio.length === 0 ? (
                 <Empty description="Пока нет записей" />
               ) : (

@@ -25,6 +25,11 @@ export const apiClient: AxiosInstance = axios.create({
   timeout: 15000,
 });
 
+/** Установить CSRF-токен, выданный backend для текущей сессии. */
+export function setCsrfToken(token: string): void {
+  apiClient.defaults.headers.common["X-CSRFToken"] = token;
+}
+
 /** Преобразовать ошибку axios в доменный ApiError. */
 export function toApiError(error: unknown): ApiError {
   if (axios.isAxiosError(error)) {
