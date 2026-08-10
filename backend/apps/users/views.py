@@ -24,6 +24,8 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from apps.orgstructure.models import Employee
+
 from .models import User
 
 logger = logging.getLogger(__name__)
@@ -56,6 +58,18 @@ def _is_locked_out(email: str) -> bool:
     return count >= settings.LOGIN_MAX_ATTEMPTS
 
 
+def _user_payload(user: User) -> dict[str, object]:
+    """Безопасный frontend-контекст без ПДн оргструктуры и внутренних прав."""
+    employee_id = Employee.objects.filter(user_id=user.pk).values_list("id", flat=True).first()
+    roles = list(user.roles.order_by("code").values_list("code", flat=True))
+    return {
+        "email": user.email,
+        "name": user.get_full_name(),
+        "employee_id": employee_id,
+        "roles": roles,
+    }
+
+
 class LoginView(APIView):
     """``POST /api/v1/auth/login/`` — вход по email + пароль (SPEC §10.2)."""
 
@@ -80,8 +94,8 @@ class LoginView(APIView):
                 status=status.HTTP_429_TOO_MANY_REQUESTS,
             )
 
-        user = authenticate(request, username=email, password=password)
-        if user is None or not user.is_active:
+        authenticated_user = authenticate(request, username=email, password=password)
+        if authenticated_user is None or not authenticated_user.is_active:
             _record_failure(email)
             logger.info("Login failed: %s", email)
             return Response(
@@ -90,16 +104,14 @@ class LoginView(APIView):
             )
 
         # Успешный вход: сброс счётчика, старт сессии, аудит.
+        user = authenticated_user
         _reset_failures(email)
         login(request, user)
         logger.info("Login success: %s", email)
         return Response(
             {
                 "detail": "Вход выполнен.",
-                "user": {
-                    "email": user.email,
-                    "name": user.get_full_name(),
-                },
+                "user": _user_payload(user),
                 "csrfToken": get_token(request),
             },
             status=status.HTTP_200_OK,
@@ -125,10 +137,6 @@ class CurrentUserView(APIView):
         """Вернуть безопасный минимум данных текущего пользователя."""
         user = cast(User, request.user)
         return Response(
-            {
-                "email": user.email,
-                "name": user.get_full_name(),
-                "csrfToken": get_token(request),
-            },
+            {**_user_payload(user), "csrfToken": get_token(request)},
             status=status.HTTP_200_OK,
         )

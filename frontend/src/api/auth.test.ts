@@ -28,7 +28,13 @@ describe("auth API CSRF", () => {
 
   it("обновляет CSRF-токен при восстановлении серверной сессии", async () => {
     vi.spyOn(apiClient, "get").mockResolvedValueOnce({
-      data: { email: "alice@corp.local", name: "Алиса", csrfToken: "restore-token" },
+      data: {
+        email: "alice@corp.local",
+        name: "Алиса",
+        employee_id: 42,
+        roles: ["employee", "manager"],
+        csrfToken: "restore-token",
+      },
     });
     const post = vi.spyOn(apiClient, "post").mockResolvedValueOnce({ data: {} });
 
@@ -37,6 +43,25 @@ describe("auth API CSRF", () => {
 
     expect(post).toHaveBeenCalledWith("/auth/logout/", undefined, {
       headers: { "X-CSRFToken": "restore-token" },
+    });
+  });
+
+  it("преобразует безопасный контекст сотрудника из /auth/me/", async () => {
+    vi.spyOn(apiClient, "get").mockResolvedValueOnce({
+      data: {
+        email: "alice@corp.local",
+        name: "Алиса",
+        employee_id: 42,
+        roles: ["employee", "manager"],
+        csrfToken: "restore-token",
+      },
+    });
+
+    await expect(getCurrentUser()).resolves.toEqual({
+      email: "alice@corp.local",
+      name: "Алиса",
+      employeeId: 42,
+      roles: ["employee", "manager"],
     });
   });
 });

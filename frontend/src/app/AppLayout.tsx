@@ -23,26 +23,38 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Link, Outlet, useLocation } from "react-router-dom";
 
 import { Logo } from "@/components/Logo";
+import type { RoleCode } from "@/api/auth";
 import { ThemeMode } from "./theme";
 import { useAuth } from "./auth-context";
 
 const { Header, Sider, Content } = Layout;
 
 // Пункты навигации (SPEC §14).
-const NAV_ITEMS = [
+const NAV_ITEMS: Array<{
+  key: string;
+  icon: React.JSX.Element;
+  label: React.JSX.Element;
+  allowedRoles?: RoleCode[];
+}> = [
   { key: "/", icon: <DashboardOutlined />, label: <Link to="/">Дашборд</Link> },
   { key: "/assessment", icon: <CalendarOutlined />, label: <Link to="/assessment">Оценка</Link> },
   {
     key: "/competencies",
     icon: <TrophyOutlined />,
     label: <Link to="/competencies">Компетенции</Link>,
+    allowedRoles: ["hr", "methodologist"],
   },
   { key: "/learning", icon: <BookOutlined />, label: <Link to="/learning">Обучение</Link> },
   { key: "/idp", icon: <SolutionOutlined />, label: <Link to="/idp">ИПР</Link> },
   { key: "/portfolio", icon: <FileTextOutlined />, label: <Link to="/portfolio">Портфолио</Link> },
   { key: "/feedback", icon: <HeartOutlined />, label: <Link to="/feedback">Обратная связь</Link> },
-  { key: "/analytics", icon: <BarChartOutlined />, label: <Link to="/analytics">Аналитика</Link> },
-] as const;
+  {
+    key: "/analytics",
+    icon: <BarChartOutlined />,
+    label: <Link to="/analytics">Аналитика</Link>,
+    allowedRoles: ["hr", "manager"],
+  },
+];
 
 const THEME_OPTIONS = [
   { label: "Светлая", value: ThemeMode.Light },
@@ -68,6 +80,12 @@ export function AppLayout({
   const { message } = App.useApp();
   const [collapsed, setCollapsed] = useState(false);
   const navigationToggleRef = useRef<HTMLButtonElement>(null);
+  const roleSet = new Set(user?.roles ?? []);
+  const navItems = NAV_ITEMS.filter(
+    (item) =>
+      item.allowedRoles === undefined || item.allowedRoles.some((role) => roleSet.has(role)),
+  );
+  const menuItems = navItems.map(({ key, icon, label }) => ({ key, icon, label }));
 
   useEffect(() => {
     const collapseOnEscape = (event: KeyboardEvent) => {
@@ -82,8 +100,7 @@ export function AppLayout({
 
   // Активный пункт — по совпадению начала пути.
   const selectedKey =
-    NAV_ITEMS.find((item) => item.key !== "/" && location.pathname.startsWith(item.key))?.key ??
-    "/";
+    navItems.find((item) => item.key !== "/" && location.pathname.startsWith(item.key))?.key ?? "/";
 
   const userMenu = {
     items: [
@@ -143,7 +160,7 @@ export function AppLayout({
           theme="light"
           width={220}
         >
-          <Menu mode="inline" selectedKeys={[selectedKey]} items={[...NAV_ITEMS]} />
+          <Menu mode="inline" selectedKeys={[selectedKey]} items={menuItems} />
         </Sider>
         <Content className="vektor-content">{children ?? <Outlet />}</Content>
       </Layout>

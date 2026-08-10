@@ -12,6 +12,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import { App, ProtectedRoutes } from "./App";
 import { AuthProvider } from "./auth";
+import { AuthContext, type AuthContextValue } from "./auth-context";
 import { ThemeMode } from "./theme";
 
 // Мокаем react-router-dom, чтобы не падать на BrowserRouter в jsdom.
@@ -71,5 +72,36 @@ describe("App-shell", () => {
     expect(
       await screen.findByRole("heading", { name: "Обратная связь и портфолио" }),
     ).toBeInTheDocument();
+  });
+
+  it("прямой переход сотрудника в административный раздел показывает 403", async () => {
+    const authValue: AuthContextValue = {
+      user: {
+        email: "employee@corp.local",
+        name: "Сотрудник",
+        employeeId: 1,
+        roles: ["employee"],
+      },
+      loading: false,
+      error: null,
+      setUser: vi.fn(),
+      signIn: vi.fn(),
+      signOut: vi.fn(),
+    };
+    render(
+      <AntdApp>
+        <AuthContext.Provider value={authValue}>
+          <MemoryRouter
+            initialEntries={["/analytics"]}
+            future={{ v7_startTransition: true, v7_relativeSplatPath: true }}
+          >
+            <ProtectedRoutes themeMode={ThemeMode.System} onThemeChange={vi.fn()} />
+          </MemoryRouter>
+        </AuthContext.Provider>
+      </AntdApp>,
+    );
+
+    expect(await screen.findByText("Нет доступа")).toBeInTheDocument();
+    expect(screen.getByText(/недоступен для вашей роли/i)).toBeInTheDocument();
   });
 });

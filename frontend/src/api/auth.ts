@@ -13,15 +13,26 @@ export interface LoginRequest {
 export interface AuthUser {
   email: string;
   name: string;
+  employeeId: number | null;
+  roles: RoleCode[];
+}
+
+export type RoleCode = "employee" | "manager" | "hr" | "methodologist";
+
+interface AuthUserResponse {
+  email: string;
+  name: string;
+  employee_id: number | null;
+  roles: RoleCode[];
 }
 
 interface LoginResponse {
   detail: string;
-  user: AuthUser;
+  user: AuthUserResponse;
   csrfToken: string;
 }
 
-interface CurrentUserResponse extends AuthUser {
+interface CurrentUserResponse extends AuthUserResponse {
   csrfToken: string;
 }
 
@@ -29,7 +40,7 @@ interface CurrentUserResponse extends AuthUser {
 export async function login(payload: LoginRequest): Promise<AuthUser> {
   const { data } = await apiClient.post<LoginResponse>("/auth/login/", payload);
   setCsrfToken(data.csrfToken);
-  return data.user;
+  return toAuthUser(data.user);
 }
 
 /** Завершить сессию. */
@@ -45,5 +56,14 @@ export async function logout(): Promise<void> {
 export async function getCurrentUser(): Promise<AuthUser> {
   const { data } = await apiClient.get<CurrentUserResponse>("/auth/me/");
   setCsrfToken(data.csrfToken);
-  return { email: data.email, name: data.name };
+  return toAuthUser(data);
+}
+
+function toAuthUser(data: AuthUserResponse): AuthUser {
+  return {
+    email: data.email,
+    name: data.name,
+    employeeId: data.employee_id,
+    roles: data.roles,
+  };
 }
