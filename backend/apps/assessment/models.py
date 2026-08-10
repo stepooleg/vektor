@@ -267,3 +267,107 @@ class AssessmentComment(models.Model):
         """Краткое представление (без оценщика — безопасность логов)."""
         snippet = self.text[:50] if self.text else ""
         return f"Комментарий: {snippet}"
+
+
+# ===========================================================================
+# MBO / OKR — целеполагание (SPEC v1.1 §16.4, issue #37)
+# ===========================================================================
+
+
+class Objective(models.Model):
+    """Цель сотрудника (MBO/OKR, SPEC v1.1 §16.4).
+
+    Цель привязана к сотруднику, периоду (квартал/год) и может быть связана
+    с циклом оценки. Завершённые/просроченные цели влияют на оценку.
+    """
+
+    class Status(models.TextChoices):
+        DRAFT = "draft", _("Черновик")
+        ACTIVE = "active", _("Активна")
+        COMPLETED = "completed", _("Завершена")
+        OVERDUE = "overdue", _("Просрочена")
+
+    class Period(models.TextChoices):
+        Q1 = "Q1", _("Q1")
+        Q2 = "Q2", _("Q2")
+        Q3 = "Q3", _("Q3")
+        Q4 = "Q4", _("Q4")
+        YEAR = "YEAR", _("Год")
+
+    employee = models.ForeignKey(
+        "orgstructure.Employee",
+        on_delete=models.CASCADE,
+        related_name="objectives",
+        verbose_name=_("Сотрудник"),
+    )
+    title = models.CharField(_("Цель"), max_length=300)
+    description = models.TextField(_("Описание"), blank=True)
+    period = models.CharField(
+        _("Период"), max_length=8, choices=Period.choices, default=Period.YEAR
+    )
+    year = models.PositiveSmallIntegerField(_("Год"), default=2026)
+    status = models.CharField(
+        _("Статус"), max_length=16, choices=Status.choices, default=Status.DRAFT
+    )
+    # Связь с циклом оценки (влияет на оценку, SPEC v1.1).
+    cycle = models.ForeignKey(
+        AssessmentCycle,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="objectives",
+        verbose_name=_("Цикл оценки"),
+    )
+    created_at = models.DateTimeField(_("Создана"), auto_now_add=True)
+    updated_at = models.DateTimeField(_("Обновлена"), auto_now=True)
+
+    class Meta:
+        verbose_name = _("Цель (MBO/OKR)")
+        verbose_name_plural = _("Цели (MBO/OKR)")
+        ordering = ["-year", "-created_at"]
+
+    def __str__(self) -> str:
+        """Цель и период."""
+        return f"{self.title} ({self.period} {self.year})"
+
+    @property
+    def progress_percent(self) -> int:
+        """Прогресс цели = средний прогресс ключевых результатов (%)."""
+        krs = self.key_results.all()
+        if not krs:
+            return 0
+        return int(sum(kr.progress_percent for kr in krs) / krs.count())
+
+
+class KeyResult(models.Model):
+    """Ключевой результат цели (KR, SPEC v1.1 §16.4).
+
+    Прогресс: текущее значение относительно целевого.
+    """
+
+    objective = models.ForeignKey(
+        Objective,
+        on_delete=models.CASCADE,
+        related_name="key_results",
+        verbose_name=_("Цель"),
+    )
+    title = models.CharField(_("KR"), max_length=300)
+    target_value = models.FloatField(_("Целевое значение"), default=100)
+    current_value = models.FloatField(_("Текущее значение"), default=0)
+    created_at = models.DateTimeField(_("Создан"), auto_now_add=True)
+
+    class Meta:
+        verbose_name = _("Ключевой результат")
+        verbose_name_plural = _("Ключевые результаты")
+        ordering = ["objective", "id"]
+
+    def __str__(self) -> str:
+        """KR и прогресс."""
+        return f"{self.title}: {self.current_value}/{self.target_value}"
+
+    @property
+    def progress_percent(self) -> int:
+        """Процент выполнения KR."""
+        if self.target_value == 0:
+            return 100 if self.current_value > 0 else 0
+        return min(100, int(self.current_value / self.target_value * 100))
