@@ -83,7 +83,9 @@ class PortfolioEntryViewSet(
             return PortfolioEntry.objects.filter(employee_id=emp_id)
         return PortfolioEntry.objects.filter(employee=viewer)
 
-    def perform_create(self, serializer: PortfolioEntrySerializer) -> None:  # type: ignore[override]
+    def perform_create(  # type: ignore[override]
+        self, serializer: PortfolioEntrySerializer
+    ) -> None:
         """Добавить запись себе либо подчинённому для руководителя."""
         viewer = _current_employee(self.request.user)
         if viewer is None:
