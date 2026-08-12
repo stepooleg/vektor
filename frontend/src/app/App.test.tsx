@@ -23,8 +23,12 @@ vi.mock("react-router-dom", async () => {
 
 vi.mock("@/api/feedback", () => ({
   getPraises: vi.fn().mockResolvedValue([]),
+  getFeedbackRequests: vi.fn().mockResolvedValue([]),
+  getFeedbackRecipients: vi.fn().mockResolvedValue([]),
   getPortfolioEntries: vi.fn().mockResolvedValue([]),
+  getPortfolioTargets: vi.fn().mockResolvedValue([]),
   PORTFOLIO_TYPE_LABELS: {},
+  FEEDBACK_REQUEST_STATUS_LABELS: {},
 }));
 
 vi.mock("@/api/auth", () => ({
@@ -69,9 +73,25 @@ describe("App-shell", () => {
       </AntdApp>,
     );
 
-    expect(
-      await screen.findByRole("heading", { name: "Обратная связь и портфолио" }),
-    ).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Портфолио" })).toBeInTheDocument();
+  });
+
+  it("маршрут /feedback открывает отдельный раздел обратной связи", async () => {
+    render(
+      <AntdApp>
+        <AuthProvider>
+          <MemoryRouter
+            initialEntries={["/feedback"]}
+            future={{ v7_startTransition: true, v7_relativeSplatPath: true }}
+          >
+            <ProtectedRoutes themeMode={ThemeMode.System} onThemeChange={vi.fn()} />
+          </MemoryRouter>
+        </AuthProvider>
+      </AntdApp>,
+    );
+
+    expect(await screen.findByRole("heading", { name: "Обратная связь" })).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Портфолио" })).not.toBeInTheDocument();
   });
 
   it("прямой переход сотрудника в административный раздел показывает 403", async () => {

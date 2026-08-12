@@ -35,6 +35,9 @@ const IdpPage = lazy(() =>
 const FeedbackPage = lazy(() =>
   import("@/pages/FeedbackPage").then((module) => ({ default: module.FeedbackPage })),
 );
+const PortfolioPage = lazy(() =>
+  import("@/pages/PortfolioPage").then((module) => ({ default: module.PortfolioPage })),
+);
 const AnalyticsPage = lazy(() =>
   import("@/pages/AnalyticsPage").then((module) => ({ default: module.AnalyticsPage })),
 );
@@ -82,7 +85,7 @@ export function ProtectedRoutes({
           />
           <Route path="/learning" element={<LearningPage />} />
           <Route path="/idp" element={<IdpPage />} />
-          <Route path="/portfolio" element={<FeedbackPage />} />
+          <Route path="/portfolio" element={<PortfolioPage />} />
           <Route path="/feedback" element={<FeedbackPage />} />
           <Route
             path="/analytics"
