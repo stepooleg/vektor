@@ -21,14 +21,13 @@ class PraiseSerializer(serializers.ModelSerializer[Praise]):
             "id",
             "recipient",
             "recipient_name",
-            "sender",
             "sender_name",
             "message",
             "is_public",
             "is_anonymous",
             "created_at",
         ]
-        read_only_fields = ["sender", "created_at", "sender_name", "recipient_name"]
+        read_only_fields = ["created_at", "sender_name", "recipient_name"]
 
     def get_sender_name(self, obj: Praise) -> str | None:
         """Безопасное отображение отправителя (скрытие анонима, §6.3)."""
