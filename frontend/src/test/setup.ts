@@ -5,7 +5,11 @@
  */
 import "@testing-library/jest-dom/vitest";
 import { afterEach, vi } from "vitest";
-import { cleanup } from "@testing-library/react";
+import { cleanup, configure } from "@testing-library/react";
+
+// Асинхронные lazy-модули и Ant Design могут загружаться дольше секунды
+// при параллельном запуске всего набора на CI/Windows.
+configure({ asyncUtilTimeout: 5_000 });
 
 // Очистка DOM между тестами (изоляция RTL).
 afterEach(() => {

@@ -11,6 +11,7 @@
 
 from __future__ import annotations
 
+from django.core.validators import MaxValueValidator
 from django.db import models
 from django.utils.translation import gettext_lazy as _
 
@@ -71,6 +72,21 @@ class DevGoal(models.Model):
     title = models.CharField(_("Цель"), max_length=300)
     description = models.TextField(_("Описание"), blank=True)
     target_level = models.PositiveSmallIntegerField(_("Целевой уровень"), default=4)
+    source_cycle = models.ForeignKey(
+        "assessment.AssessmentCycle",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="generated_dev_goals",
+        verbose_name=_("Источник: цикл оценки"),
+    )
+    source_current_level = models.DecimalField(
+        _("Источник: текущий уровень"),
+        max_digits=4,
+        decimal_places=2,
+        null=True,
+        blank=True,
+    )
 
     class Meta:
         verbose_name = _("Цель развития")
@@ -134,6 +150,9 @@ class DevAction(models.Model):
         max_length=16,
         choices=Status.choices,
         default=Status.PLANNED,
+    )
+    progress_percent = models.PositiveSmallIntegerField(
+        _("Прогресс, %"), default=0, validators=[MaxValueValidator(100)]
     )
     created_at = models.DateTimeField(_("Создано"), auto_now_add=True)
 
