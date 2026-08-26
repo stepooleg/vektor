@@ -5,7 +5,7 @@
 # =============================================================================
 FROM python:3.12-slim AS base
 
-# Системные пакеты для psycopg3 (libpq), Argon2 и сборки.
+# Системные пакеты для psycopg3 (libpq), Argon2, LDAP/SASL и сборки.
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     PIP_NO_CACHE_DIR=1 \
@@ -14,6 +14,8 @@ ENV PYTHONUNBUFFERED=1 \
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         build-essential \
+        libldap2-dev \
+        libsasl2-dev \
         libpq-dev \
         curl \
     && rm -rf /var/lib/apt/lists/*

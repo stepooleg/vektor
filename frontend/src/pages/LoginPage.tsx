@@ -1,11 +1,9 @@
 /**
  * Страница входа (SPEC §14.1 — единая страница логина).
  *
- * Вход по email + пароль (запасной механизм, SPEC §10.2). SSO-кнопка —
- * расширяемая заглушка (тип SSO уточняется, SPEC §17 п.2).
+ * Вход по AD-имени или email + пароль (LDAP с локальным fallback, SPEC §10.2).
  * Тон голоса — BRANDBOOK §9 (ясный, поддерживающий).
  */
-import { LockOutlined, MailOutlined } from "@ant-design/icons";
 import { Alert, App, Button, Card, Form, Input, Typography, type FormProps } from "antd";
 import { useState } from "react";
 
@@ -16,7 +14,7 @@ import { getLoginErrorMessage } from "./login-error";
 
 const { Title, Text } = Typography;
 
-type LoginForm = { email: string; password: string };
+type LoginForm = { identifier: string; password: string };
 
 export function LoginPage(): React.JSX.Element {
   const { signIn } = useAuth();
@@ -28,7 +26,7 @@ export function LoginPage(): React.JSX.Element {
     setSubmitting(true);
     setFormError(null);
     try {
-      await signIn(values.email, values.password);
+      await signIn(values.identifier, values.password);
       message.success("Вход выполнен");
     } catch (error) {
       setFormError(getLoginErrorMessage(toApiError(error)));
@@ -72,25 +70,18 @@ export function LoginPage(): React.JSX.Element {
 
         <Form<LoginForm> layout="vertical" onFinish={onFinish} autoComplete="on">
           <Form.Item
-            name="email"
-            label="Корпоративный email"
-            rules={[
-              { required: true, message: "Введите email" },
-              { type: "email", message: "Некорректный email" },
-            ]}
+            name="identifier"
+            label="Корпоративная учётная запись или email"
+            rules={[{ required: true, message: "Введите учётную запись или email" }]}
           >
-            <Input prefix={<MailOutlined />} placeholder="you@company.ru" autoComplete="username" />
+            <Input placeholder="a.ivanova" autoComplete="username" />
           </Form.Item>
           <Form.Item
             name="password"
             label="Пароль"
             rules={[{ required: true, message: "Введите пароль" }]}
           >
-            <Input.Password
-              prefix={<LockOutlined />}
-              placeholder="Пароль"
-              autoComplete="current-password"
-            />
+            <Input.Password placeholder="Пароль" autoComplete="current-password" />
           </Form.Item>
           <Form.Item style={{ marginBottom: 8 }}>
             <Button type="primary" htmlType="submit" block loading={submitting}>
@@ -99,9 +90,8 @@ export function LoginPage(): React.JSX.Element {
           </Form.Item>
         </Form>
 
-        {/* TODO(#6, SPEC §17 п.2): кнопка SSO — тип уточняется (SAML/OIDC/LDAP). */}
         <Text type="secondary" style={{ display: "block", textAlign: "center" }}>
-          Вход через корпоративную учётную запись будет добавлен после настройки SSO.
+          Используйте учётную запись Active Directory или разрешённый локальный email.
         </Text>
       </Card>
     </div>

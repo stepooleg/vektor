@@ -97,3 +97,14 @@ def test_user_ad_account_optional_for_local_login() -> None:
 
     assert user.ad_account in (None, "")
     assert user.local_login_enabled is False
+
+
+@pytest.mark.django_db
+def test_superuser_has_explicit_local_fallback() -> None:
+    """Аварийный администратор сохраняет локальный вход при недоступности AD."""
+    user = UserModel.objects.create_superuser(
+        email="admin@corp.local",
+        password="Strong-Pwd-12345",
+    )
+
+    assert user.local_login_enabled is True

@@ -37,11 +37,11 @@ export function AuthProvider({ children }: AuthProviderProps): React.JSX.Element
     };
   }, []);
 
-  const signIn = useCallback(async (email: string, password: string) => {
+  const signIn = useCallback(async (identifier: string, password: string) => {
     setLoading(true);
     setError(null);
     try {
-      const u = await login({ email, password });
+      const u = await login({ identifier, password });
       setUser(u);
     } catch (e) {
       setError(toApiError(e).detail);

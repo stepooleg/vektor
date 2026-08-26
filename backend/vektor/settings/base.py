@@ -13,6 +13,8 @@ from typing import TYPE_CHECKING
 import dj_database_url
 from dotenv import load_dotenv
 
+from apps.users.ldap_config import parse_group_role_map, validate_secure_transport
+
 if TYPE_CHECKING:
     from typing import Any
 
@@ -174,10 +176,62 @@ LOGIN_REDIRECT_URL: str = "/"
 # Кастомная модель пользователя (SPEC §10.2, §2). Домен apps.users.
 AUTH_USER_MODEL: str = "users.User"
 
-# TODO(#6): SSO (SAML/OIDC/LDAP) — уточняется с администратором (SPEC §17 п.2).
-#   Реализовать плагин аутентификации (django-auth-ldap / django-saml2) с
-#   расширяемой абстракцией, локальный пароль — запасной механизм.
+# Прямой LDAP bind к Active Directory (ADR 0006, SPEC §10.2, issue #42).
 AUTH_LDAP_ENABLED: bool = _env_bool("AUTH_LDAP_ENABLED", default=False)
+AUTH_LDAP_SERVER_URI: str = os.environ.get("AUTH_LDAP_SERVER_URI", "")
+AUTH_LDAP_BIND_DN: str = os.environ.get("AUTH_LDAP_BIND_DN", "")
+AUTH_LDAP_BIND_PASSWORD: str = os.environ.get("AUTH_LDAP_BIND_PASSWORD", "")
+AUTH_LDAP_USER_SEARCH_BASE: str = os.environ.get("AUTH_LDAP_USER_SEARCH_BASE", "")
+AUTH_LDAP_START_TLS: bool = _env_bool("AUTH_LDAP_START_TLS", default=False)
+AUTH_LDAP_ALLOW_INSECURE: bool = _env_bool("AUTH_LDAP_ALLOW_INSECURE", default=False)
+AUTH_LDAP_CA_CERT_FILE: str = os.environ.get("AUTH_LDAP_CA_CERT_FILE", "")
+AUTH_LDAP_ALWAYS_UPDATE_USER: bool = True
+AUTH_LDAP_USER_QUERY_FIELD: str = "email"
+AUTH_LDAP_USER_ATTR_MAP: dict[str, str] = {
+    "email": "mail",
+    "first_name": "displayName",
+}
+AUTH_LDAP_USER_ATTRLIST: list[str] = ["mail", "displayName", "thumbnailPhoto", "memberOf"]
+AUTH_LDAP_GROUP_ROLE_MAP: dict[str, str] = parse_group_role_map(
+    os.environ.get("AUTH_LDAP_GROUP_ROLE_MAP", "")
+)
+
+if AUTH_LDAP_ENABLED:
+    if not AUTH_LDAP_SERVER_URI or not AUTH_LDAP_USER_SEARCH_BASE:
+        from django.core.exceptions import ImproperlyConfigured
+
+        msg = "Для LDAP обязательны AUTH_LDAP_SERVER_URI и AUTH_LDAP_USER_SEARCH_BASE."
+        raise ImproperlyConfigured(msg)
+
+    validate_secure_transport(
+        AUTH_LDAP_SERVER_URI,
+        start_tls=AUTH_LDAP_START_TLS,
+        allow_insecure=AUTH_LDAP_ALLOW_INSECURE,
+    )
+
+    import ldap
+    from django_auth_ldap.config import LDAPSearch
+
+    AUTH_LDAP_CONNECTION_OPTIONS: dict[int, object] = {
+        ldap.OPT_X_TLS_REQUIRE_CERT: ldap.OPT_X_TLS_DEMAND,
+    }
+    if AUTH_LDAP_CA_CERT_FILE:
+        AUTH_LDAP_CONNECTION_OPTIONS[ldap.OPT_X_TLS_CACERTFILE] = AUTH_LDAP_CA_CERT_FILE
+
+    AUTH_LDAP_USER_SEARCH = LDAPSearch(
+        AUTH_LDAP_USER_SEARCH_BASE,
+        ldap.SCOPE_SUBTREE,
+        "(|(sAMAccountName=%(user)s)(userPrincipalName=%(user)s))",
+        attrlist=AUTH_LDAP_USER_ATTRLIST,
+    )
+
+LOCAL_LOGIN_ENABLED: bool = _env_bool("LOCAL_LOGIN_ENABLED", default=True)
+
+# LDAP проверяется первым; local fallback требует глобального и пользовательского флагов.
+AUTHENTICATION_BACKENDS: tuple[str, ...] = (
+    *(("apps.users.ldap_backend.VektorLDAPBackend",) if AUTH_LDAP_ENABLED else ()),
+    *(("apps.users.local_backend.LocalModelBackend",) if LOCAL_LOGIN_ENABLED else ()),
+)
 
 # Защита от перебора паролей (SPEC §10.2): lockout после N неудачных попыток.
 LOGIN_MAX_ATTEMPTS: int = int(os.environ.get("LOGIN_MAX_ATTEMPTS", "5"))

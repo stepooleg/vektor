@@ -10,8 +10,10 @@
 
 from __future__ import annotations
 
+import logging
+
 import pytest
-from django.contrib.auth import get_user_model
+from django.contrib.auth import authenticate, get_user_model
 from django.test import override_settings
 from rest_framework import status
 from rest_framework.test import APIClient
@@ -47,6 +49,20 @@ def test_login_valid_user_returns_session(_user_with_password: User) -> None:
 
 
 @pytest.mark.django_db
+def test_login_accepts_neutral_account_identifier(_user_with_password: User) -> None:
+    """API принимает единый идентификатор для AD-логина и локального email."""
+    client = APIClient()
+
+    response = client.post(
+        "/api/v1/auth/login/",
+        {"identifier": "alice@corp.local", "password": "Strong-Pwd-12345"},
+        format="json",
+    )
+
+    assert response.status_code == status.HTTP_200_OK
+
+
+@pytest.mark.django_db
 def test_login_wrong_password_denied(_user_with_password: User) -> None:
     """Неверный пароль → 401, сессия не установлена."""
     client = APIClient()
@@ -59,6 +75,54 @@ def test_login_wrong_password_denied(_user_with_password: User) -> None:
 
     assert response.status_code == status.HTTP_401_UNAUTHORIZED
     assert "sessionid" not in response.cookies
+
+
+@pytest.mark.django_db
+def test_failed_login_does_not_write_account_identifier_to_log(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """Ошибка AD/local login не раскрывает существование или идентификатор учётки."""
+    identifier = "sensitive.account@corp.local"
+    client = APIClient()
+
+    with caplog.at_level(logging.INFO, logger="apps.users.views"):
+        response = client.post(
+            "/api/v1/auth/login/",
+            {"email": identifier, "password": "Wrong-Pwd-99999"},
+            format="json",
+        )
+
+    assert response.status_code == status.HTTP_401_UNAUTHORIZED
+    assert identifier not in caplog.text
+
+
+@pytest.mark.django_db
+def test_local_backend_denies_user_without_local_login_permission() -> None:
+    """Пароль не обходит LDAP для учётки без разрешённого local fallback."""
+    user = UserModel.objects.create_user(
+        email="directory-user@corp.local",
+        password="Strong-Pwd-12345",
+        ad_account="directory-user",
+    )
+
+    authenticated_user = authenticate(
+        username=user.email,
+        password="Strong-Pwd-12345",
+    )
+
+    assert authenticated_user is None
+
+
+@pytest.mark.django_db
+@override_settings(LOCAL_LOGIN_ENABLED=False)
+def test_local_backend_respects_global_disable_switch(_user_with_password: User) -> None:
+    """Глобальный флаг отключает local fallback даже для разрешённого пользователя."""
+    authenticated_user = authenticate(
+        username=_user_with_password.email,
+        password="Strong-Pwd-12345",
+    )
+
+    assert authenticated_user is None
 
 
 @pytest.mark.django_db

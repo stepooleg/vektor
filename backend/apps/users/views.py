@@ -78,36 +78,36 @@ class LoginView(APIView):
 
     def post(self, request: Request) -> Response:
         """Аутентифицировать пользователя и установить сессию."""
-        email = (request.data.get("email") or "").strip()
+        identifier = (request.data.get("identifier") or request.data.get("email") or "").strip()
         password = request.data.get("password") or ""
 
-        if not email or not password:
+        if not identifier or not password:
             return Response(
-                {"detail": "Email и пароль обязательны."},
+                {"detail": "Учётная запись и пароль обязательны."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        if _is_locked_out(email):
-            logger.warning("Login locked out: %s", email)
+        if _is_locked_out(identifier):
+            logger.warning("Login locked out")
             return Response(
                 {"detail": "Слишком много попыток. Попробуйте позже."},
                 status=status.HTTP_429_TOO_MANY_REQUESTS,
             )
 
-        authenticated_user = authenticate(request, username=email, password=password)
+        authenticated_user = authenticate(request, username=identifier, password=password)
         if authenticated_user is None or not authenticated_user.is_active:
-            _record_failure(email)
-            logger.info("Login failed: %s", email)
+            _record_failure(identifier)
+            logger.info("Login failed")
             return Response(
-                {"detail": "Неверный email или пароль."},
+                {"detail": "Неверная учётная запись или пароль."},
                 status=status.HTTP_401_UNAUTHORIZED,
             )
 
         # Успешный вход: сброс счётчика, старт сессии, аудит.
         user = authenticated_user
-        _reset_failures(email)
+        _reset_failures(identifier)
         login(request, user)
-        logger.info("Login success: %s", email)
+        logger.info("Login success")
         return Response(
             {
                 "detail": "Вход выполнен.",
