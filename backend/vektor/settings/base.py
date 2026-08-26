@@ -191,7 +191,9 @@ AUTH_LDAP_USER_ATTR_MAP: dict[str, str] = {
     "email": "mail",
     "first_name": "displayName",
 }
-AUTH_LDAP_USER_ATTRLIST: list[str] = ["mail", "displayName", "thumbnailPhoto", "memberOf"]
+# django-auth-ldap декодирует LDAPSearch как UTF-8; бинарное фото читается
+# отдельным base-object search в VektorLDAPBackend.
+AUTH_LDAP_USER_ATTRLIST: list[str] = ["mail", "displayName", "memberOf"]
 AUTH_LDAP_GROUP_ROLE_MAP: dict[str, str] = parse_group_role_map(
     os.environ.get("AUTH_LDAP_GROUP_ROLE_MAP", "")
 )
