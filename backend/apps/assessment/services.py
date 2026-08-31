@@ -10,12 +10,12 @@ test_anonymity). Сырые ответы НЕ возвращаются публ�
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from datetime import date
-from typing import TYPE_CHECKING, NotRequired, TypedDict
+from dataclasses import asdict, dataclass
+from datetime import date, datetime
+from typing import TYPE_CHECKING, NotRequired, TypedDict, cast
 
 from django.db import transaction
-from django.db.models import QuerySet
+from django.db.models import Q, QuerySet
 from django.utils import timezone
 
 from apps.competencies.models import CompetencyFramework
@@ -23,6 +23,7 @@ from apps.orgstructure.models import Employee
 from apps.users.models import User
 
 from .models import (
+    AssessmentAggregateArchive,
     AssessmentComment,
     AssessmentCycle,
     AssessmentResponse,
@@ -264,6 +265,27 @@ class CycleAggregate:
 
 
 @dataclass(frozen=True)
+class AssessmentRetentionResult:
+    """Технические счётчики одного запуска политики хранения."""
+
+    aggregate_mode: str
+    cycles_processed: int = 0
+    responses_deleted: int = 0
+    comments_deleted: int = 0
+    archives_created: int = 0
+
+    def as_dict(self) -> dict[str, int | str]:
+        """Вернуть JSON-совместимый результат для Celery и мониторинга."""
+        return {
+            "aggregate_mode": self.aggregate_mode,
+            "archives_created": self.archives_created,
+            "comments_deleted": self.comments_deleted,
+            "cycles_processed": self.cycles_processed,
+            "responses_deleted": self.responses_deleted,
+        }
+
+
+@dataclass(frozen=True)
 class SelfVsOthersGap:
     """Разрыв между самооценкой и оценкой окружения (SPEC §5.1.2)."""
 
@@ -327,6 +349,10 @@ def aggregate_cycle(cycle: AssessmentCycle) -> CycleAggregate:
     - сырые ответы НЕ возвращаются — только средние по группам;
     - группы ниже порога анонимности помечаются ``hidden_by_threshold``.
     """
+    archive = AssessmentAggregateArchive.objects.filter(cycle=cycle).first()
+    if archive is not None:
+        return _deserialize_aggregate(archive.payload)
+
     # Проверка обязательной группы «руководитель».
     has_manager = ReviewerAssignment.objects.filter(
         cycle=cycle, group=ReviewerAssignment.Group.MANAGER.value
@@ -347,6 +373,100 @@ def aggregate_cycle(cycle: AssessmentCycle) -> CycleAggregate:
         groups.append(_aggregate_group(cycle, group_code, threshold))
 
     return CycleAggregate(cycle_id=cycle.id, groups=groups)
+
+
+def _deserialize_aggregate(payload: object) -> CycleAggregate:
+    """Восстановить публичный агрегат из созданного системой снимка."""
+    data = cast(dict[str, object], payload)
+    groups_data = cast(list[dict[str, object]], data["groups"])
+    return CycleAggregate(
+        cycle_id=int(cast(int, data["cycle_id"])),
+        groups=[
+            GroupAggregate(
+                group=str(item["group"]),
+                participants_count=int(cast(int, item["participants_count"])),
+                mean_score=float(cast(float, item["mean_score"])),
+                hidden_by_threshold=bool(item["hidden_by_threshold"]),
+            )
+            for item in groups_data
+        ],
+    )
+
+
+def _subtract_years(value: datetime, years: int) -> datetime:
+    """Вычесть календарные годы, корректно обработав 29 февраля."""
+    try:
+        return value.replace(year=value.year - years)
+    except ValueError:
+        return value.replace(year=value.year - years, day=28)
+
+
+@transaction.atomic
+def apply_assessment_retention(
+    *,
+    now: datetime,
+    retention_years: int,
+    aggregate_mode: str,
+) -> AssessmentRetentionResult:
+    """Удалить сырьё закрытых циклов старше срока и обработать агрегаты.
+
+    Граница считается от последнего изменения закрытого цикла. Цикл ровно на
+    границе срока сохраняется до следующего запуска. Операция идемпотентна.
+    """
+    if retention_years <= 0:
+        msg = "retention_years должен быть положительным"
+        raise ValueError(msg)
+    if aggregate_mode not in {"archive", "delete"}:
+        msg = "aggregate_mode должен быть archive или delete"
+        raise ValueError(msg)
+
+    cutoff = _subtract_years(now, retention_years)
+    cycles = list(
+        AssessmentCycle.objects.filter(
+            Q(reviewer_assignments__responses__isnull=False)
+            | Q(reviewer_assignments__comments__isnull=False),
+            status=AssessmentCycle.Status.CLOSED,
+            updated_at__lt=cutoff,
+        ).distinct()
+    )
+
+    responses_deleted = 0
+    comments_deleted = 0
+    archives_created = 0
+    for cycle in cycles:
+        if aggregate_mode == "archive":
+            aggregate = aggregate_cycle(cycle)
+            _, created = AssessmentAggregateArchive.objects.get_or_create(
+                cycle=cycle,
+                defaults={"payload": asdict(aggregate)},
+            )
+            archives_created += int(created)
+        else:
+            AssessmentAggregateArchive.objects.filter(cycle=cycle).delete()
+
+        response_query = AssessmentResponse.objects.filter(assignment__cycle=cycle)
+        comment_query = AssessmentComment.objects.filter(assignment__cycle=cycle)
+        responses_deleted += response_query.count()
+        comments_deleted += comment_query.count()
+        response_query.delete()
+        comment_query.delete()
+
+    result = AssessmentRetentionResult(
+        aggregate_mode=aggregate_mode,
+        cycles_processed=len(cycles),
+        responses_deleted=responses_deleted,
+        comments_deleted=comments_deleted,
+        archives_created=archives_created,
+    )
+    from apps.audit.services import log_action
+
+    log_action(
+        actor=None,
+        action="assessment.retention.run",
+        target_type="assessment.retention",
+        details=result.as_dict(),
+    )
+    return result
 
 
 def _aggregate_group(cycle: AssessmentCycle, group_code: str, threshold: int) -> GroupAggregate:
