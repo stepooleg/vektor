@@ -115,8 +115,11 @@ def test_retention_archives_aggregate_and_deletes_only_cycles_older_than_boundar
     assert result.responses_deleted == 1
     assert result.comments_deleted == 1
     assert result.archives_created == 1
+    assert result.archives_deleted == 0
     assert not AssessmentResponse.objects.filter(pk=expired_response.pk).exists()
     assert AssessmentResponse.objects.filter(pk=boundary_response.pk).exists()
+    expired_cycle.refresh_from_db()
+    assert expired_cycle.status == AssessmentCycle.Status.CLOSED
 
     archive = AssessmentAggregateArchive.objects.get(cycle=expired_cycle)
     assert archive.payload == expected_archive
@@ -131,6 +134,7 @@ def test_retention_archives_aggregate_and_deletes_only_cycles_older_than_boundar
     assert audit.details == {
         "aggregate_mode": "archive",
         "archives_created": 1,
+        "archives_deleted": 0,
         "comments_deleted": 1,
         "cycles_processed": 1,
         "responses_deleted": 1,
@@ -160,9 +164,11 @@ def test_retention_delete_mode_is_idempotent() -> None:
     assert first.responses_deleted == 1
     assert first.comments_deleted == 1
     assert first.archives_created == 0
+    assert first.archives_deleted == 0
     assert second.cycles_processed == 0
     assert second.responses_deleted == 0
     assert second.comments_deleted == 0
+    assert second.archives_deleted == 0
     assert not AssessmentAggregateArchive.objects.filter(cycle=cycle).exists()
 
 
@@ -179,6 +185,7 @@ def test_retention_task_uses_deployment_settings(settings: Any) -> None:
     assert result == {
         "aggregate_mode": "delete",
         "archives_created": 0,
+        "archives_deleted": 0,
         "comments_deleted": 1,
         "cycles_processed": 1,
         "responses_deleted": 1,
@@ -220,3 +227,55 @@ def test_employee_cannot_access_archived_aggregate() -> None:
     response = client.get(f"/api/v1/assessment/cycles/{cycle.pk}/results/")
 
     assert response.status_code == status.HTTP_403_FORBIDDEN
+
+
+@pytest.mark.django_db
+def test_retention_archives_and_cleans_whole_cycle_when_first_raw_item_expires() -> None:
+    """Снимок полон, а ни один сырой объект не хранится сверх срока."""
+    now = timezone.now()
+    cutoff = now.replace(year=now.year - 5)
+    cycle, response = _make_cycle(name="mixed-age")
+    comment = AssessmentComment.objects.get(assignment__cycle=cycle)
+    AssessmentResponse.objects.filter(pk=response.pk).update(
+        created_at=cutoff - timedelta(seconds=1)
+    )
+    AssessmentComment.objects.filter(pk=comment.pk).update(created_at=cutoff)
+
+    result = apply_assessment_retention(
+        now=now,
+        retention_years=5,
+        aggregate_mode="archive",
+    )
+
+    assert result.cycles_processed == 1
+    assert result.responses_deleted == 1
+    assert result.comments_deleted == 1
+    assert not AssessmentResponse.objects.filter(pk=response.pk).exists()
+    assert not AssessmentComment.objects.filter(pk=comment.pk).exists()
+    assert AssessmentAggregateArchive.objects.filter(cycle=cycle).exists()
+    cycle.refresh_from_db()
+    assert cycle.status == AssessmentCycle.Status.CLOSED
+
+
+@pytest.mark.django_db
+def test_delete_mode_removes_previously_created_archive() -> None:
+    """Смена deployment-политики на delete удаляет существующий snapshot."""
+    now = timezone.now()
+    cycle, _ = _make_cycle(name="archive-to-delete")
+    _set_raw_created_at(cycle, now.replace(year=now.year - 6))
+    apply_assessment_retention(
+        now=now,
+        retention_years=5,
+        aggregate_mode="archive",
+    )
+    assert AssessmentAggregateArchive.objects.filter(cycle=cycle).exists()
+
+    result = apply_assessment_retention(
+        now=now,
+        retention_years=5,
+        aggregate_mode="delete",
+    )
+
+    assert result.cycles_processed == 0
+    assert result.archives_deleted == 1
+    assert not AssessmentAggregateArchive.objects.filter(cycle=cycle).exists()

@@ -273,12 +273,14 @@ class AssessmentRetentionResult:
     responses_deleted: int = 0
     comments_deleted: int = 0
     archives_created: int = 0
+    archives_deleted: int = 0
 
     def as_dict(self) -> dict[str, int | str]:
         """Вернуть JSON-совместимый результат для Celery и мониторинга."""
         return {
             "aggregate_mode": self.aggregate_mode,
             "archives_created": self.archives_created,
+            "archives_deleted": self.archives_deleted,
             "comments_deleted": self.comments_deleted,
             "cycles_processed": self.cycles_processed,
             "responses_deleted": self.responses_deleted,
@@ -410,9 +412,10 @@ def apply_assessment_retention(
 ) -> AssessmentRetentionResult:
     """Удалить сырьё закрытых циклов старше срока и обработать агрегаты.
 
-    Граница считается отдельно от неизменяемого ``created_at`` каждого сырого
-    объекта. Объект ровно на границе срока сохраняется до следующего запуска.
-    Операция не зависит от статуса цикла и идемпотентна.
+    Граница считается от неизменяемого ``created_at`` сырья. Когда истекает
+    первый объект цикла, снимок строится по полному набору, всё сырьё цикла
+    удаляется, а цикл закрывается. Поэтому ни один ответ не хранится сверх
+    срока, а архив не становится частичным. Операция идемпотентна.
     """
     if retention_years <= 0:
         msg = "retention_years должен быть положительным"
@@ -433,45 +436,43 @@ def apply_assessment_retention(
         AssessmentCycle.objects.select_for_update().filter(id__in=cycle_ids).order_by("id")
     )
 
+    archives_deleted = 0
+    if aggregate_mode == "delete":
+        archive_query = AssessmentAggregateArchive.objects.all()
+        archives_deleted = archive_query.count()
+        archive_query.delete()
+
     responses_deleted = 0
     comments_deleted = 0
     archives_created = 0
+    cycles_processed = 0
     for cycle in cycles:
-        has_unexpired_raw_data = (
-            AssessmentResponse.objects.filter(
-                assignment__cycle=cycle, created_at__gte=cutoff
-            ).exists()
-            or AssessmentComment.objects.filter(
-                assignment__cycle=cycle, created_at__gte=cutoff
-            ).exists()
-        )
-        if aggregate_mode == "archive" and not has_unexpired_raw_data:
+        if aggregate_mode == "archive":
             aggregate = aggregate_cycle(cycle)
             _, created = AssessmentAggregateArchive.objects.get_or_create(
                 cycle=cycle,
                 defaults={"payload": asdict(aggregate)},
             )
             archives_created += int(created)
-        elif aggregate_mode == "delete":
-            AssessmentAggregateArchive.objects.filter(cycle=cycle).delete()
 
-        response_query = AssessmentResponse.objects.filter(
-            assignment__cycle=cycle, created_at__lt=cutoff
-        )
-        comment_query = AssessmentComment.objects.filter(
-            assignment__cycle=cycle, created_at__lt=cutoff
-        )
+        response_query = AssessmentResponse.objects.filter(assignment__cycle=cycle)
+        comment_query = AssessmentComment.objects.filter(assignment__cycle=cycle)
         responses_deleted += response_query.count()
         comments_deleted += comment_query.count()
         response_query.delete()
         comment_query.delete()
+        if cycle.status != AssessmentCycle.Status.CLOSED:
+            cycle.status = AssessmentCycle.Status.CLOSED
+            cycle.save(update_fields=["status", "updated_at"])
+        cycles_processed += 1
 
     result = AssessmentRetentionResult(
         aggregate_mode=aggregate_mode,
-        cycles_processed=len(cycles),
+        cycles_processed=cycles_processed,
         responses_deleted=responses_deleted,
         comments_deleted=comments_deleted,
         archives_created=archives_created,
+        archives_deleted=archives_deleted,
     )
     from apps.audit.services import log_action
 
