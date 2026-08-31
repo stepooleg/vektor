@@ -6,7 +6,7 @@
 import { apiClient, setCsrfToken } from "./client";
 
 export interface LoginRequest {
-  email: string;
+  identifier: string;
   password: string;
 }
 
@@ -36,7 +36,7 @@ interface CurrentUserResponse extends AuthUserResponse {
   csrfToken: string;
 }
 
-/** Войти по email + пароль (сессионная cookie). */
+/** Войти по AD-имени или email + пароль (сессионная cookie). */
 export async function login(payload: LoginRequest): Promise<AuthUser> {
   const { data } = await apiClient.post<LoginResponse>("/auth/login/", payload);
   setCsrfToken(data.csrfToken);

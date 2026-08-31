@@ -33,6 +33,9 @@ dependencies = [
     "python-dotenv>=1.0,<2",
     # Безопасность: хеширование паролей (SPEC §12.2 — Argon2)
     "argon2-cffi>=23.1,<25",
+    # Корпоративный вход через прямой LDAP bind к Active Directory (SPEC §10.2)
+    # python-ldap не поддерживает Windows; production/CI работают в Linux-контейнере.
+    "django-auth-ldap>=5.3,<6; sys_platform != 'win32'",
     # Web Push (PWA, SPEC §10.4)
     "pywebpush>=2.0,<3",
     # Экспорт отчётов (SPEC §9.5)
@@ -152,6 +155,8 @@ module = [
     "pywebpush",
     "reportlab",
     "reportlab.lib.styles",
+    "django_auth_ldap.*",
+    "ldap.*",
 ]
 ignore_missing_imports = true
 

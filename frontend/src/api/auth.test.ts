@@ -18,7 +18,7 @@ describe("auth API CSRF", () => {
       })
       .mockResolvedValueOnce({ data: { detail: "Сессия завершена." } });
 
-    await login({ email: "alice@corp.local", password: "password" });
+    await login({ identifier: "alice@corp.local", password: "password" });
     await logout();
 
     expect(post).toHaveBeenLastCalledWith("/auth/logout/", undefined, {

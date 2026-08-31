@@ -13,7 +13,7 @@ export interface AuthContextValue {
   loading: boolean;
   error: string | null;
   setUser: (user: AuthUser | null) => void;
-  signIn: (email: string, password: string) => Promise<void>;
+  signIn: (identifier: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
 }
 

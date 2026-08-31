@@ -65,6 +65,7 @@ class UserManager(BaseUserManager["User"]):
         """Создать суперпользователя (для manage.py createsuperuser)."""
         extra_fields.setdefault("is_staff", True)
         extra_fields.setdefault("is_superuser", True)
+        extra_fields.setdefault("local_login_enabled", True)
         if extra_fields.get("is_staff") is not True:
             msg = "Суперпользователь должен иметь is_staff=True."
             raise ValueError(msg)
@@ -184,6 +185,14 @@ class User(AbstractUser):
         unique=True,
         null=True,
         help_text=_("sAMAccountName или эквивалент. Пусто — локальный вход по паролю."),
+    )
+
+    ad_thumbnail_photo = models.BinaryField(
+        _("Фото из AD"),
+        blank=True,
+        null=True,
+        editable=False,
+        help_text=_("Копия thumbnailPhoto, обновляемая после успешного LDAP-входа."),
     )
 
     # Флаг: разрешён ли запасной локальный пароль (для внешних консультантов).

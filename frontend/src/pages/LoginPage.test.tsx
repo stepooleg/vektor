@@ -37,18 +37,18 @@ describe("LoginPage", () => {
     vi.clearAllMocks();
   });
 
-  it("рендерит форму с полем email и кнопкой входа", () => {
+  it("рендерит форму с полем учётной записи и кнопкой входа", () => {
     render(
       <AuthContext.Provider value={authValue}>
         <LoginPage />
       </AuthContext.Provider>,
     );
 
-    expect(screen.getByLabelText(/email/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/учётная запись/i)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /войти/i })).toBeInTheDocument();
   });
 
-  it("требует заполнения email и пароля (валидация)", async () => {
+  it("требует заполнения учётной записи и пароля (валидация)", async () => {
     render(
       <AuthContext.Provider value={authValue}>
         <LoginPage />
@@ -58,8 +58,28 @@ describe("LoginPage", () => {
     fireEvent.click(screen.getByRole("button", { name: /войти/i }));
 
     await waitFor(() => {
-      expect(screen.getByText(/введите email/i)).toBeInTheDocument();
+      expect(screen.getByText(/введите учётную запись или email/i)).toBeInTheDocument();
       expect(screen.getByText(/введите пароль/i)).toBeInTheDocument();
+    });
+  });
+
+  it("принимает sAMAccountName для корпоративного LDAP-входа", async () => {
+    render(
+      <AuthContext.Provider value={authValue}>
+        <LoginPage />
+      </AuthContext.Provider>,
+    );
+
+    fireEvent.change(screen.getByLabelText(/корпоративная учётная запись/i), {
+      target: { value: "a.ivanova" },
+    });
+    fireEvent.change(screen.getByLabelText(/пароль/i), {
+      target: { value: "Strong-Pwd-12345" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /войти/i }));
+
+    await waitFor(() => {
+      expect(authValue.signIn).toHaveBeenCalledWith("a.ivanova", "Strong-Pwd-12345");
     });
   });
 

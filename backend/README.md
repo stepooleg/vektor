@@ -43,3 +43,26 @@ uv run mypy .
 
 Только через переменные окружения (`.env` в `.gitignore`).
 См. [`.env.example`](../.env.example).
+
+## LDAP без привязки к конкретному клиенту
+
+До выбора площадки `AUTH_LDAP_ENABLED=False`: локальная разработка и CI не требуют
+корпоративной учётной записи. Полная цепочка `search → user bind → синхронизация`
+проверяется автономным Linux contract test с совместимым протоколом `python-ldap`:
+
+```bash
+docker compose run --rm backend \
+  pytest apps/users/tests/test_ldap_backend.py -q
+```
+
+При внедрении администратор заполняет LDAP-параметры из `.env.example`, монтирует
+корпоративный CA при необходимости и выполняет smoke test именно LDAP backend:
+
+```bash
+docker compose exec backend python manage.py verify_ldap <sAMAccountName-или-UPN>
+```
+
+Пароль запрашивается скрыто, не принимается аргументом командной строки и не выводится.
+Успешная проверка подтверждает доступность endpoint, CA/TLS, Base DN, service search,
+bind пользователя и синхронизацию профиля. Эти значения являются параметрами установки,
+а не условием готовности продукта до появления конкретного клиента.
