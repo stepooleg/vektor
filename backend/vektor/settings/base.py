@@ -11,6 +11,8 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 import dj_database_url
+from celery.schedules import crontab
+from django.core.exceptions import ImproperlyConfigured
 from dotenv import load_dotenv
 
 from apps.users.ldap_config import parse_group_role_map, validate_secure_transport
@@ -324,10 +326,33 @@ CELERY_ACCEPT_CONTENT: list[str] = ["json"]
 CELERY_TASK_SERIALIZER: str = "json"
 CELERY_RESULT_SERIALIZER: str = "json"
 CELERY_TIMEZONE: str = TIME_ZONE
+CELERY_BEAT_SCHEDULE: dict[str, dict[str, object]] = {
+    "assessment-retention-daily": {
+        "task": "assessment.retention_daily",
+        "schedule": crontab(hour=3, minute=0),
+    },
+}
 
 # ---------------------------------------------------------------------------
-# Комплаенс (SPEC §17 п.3 — сроки хранения уточняются)
+# Комплаенс (SPEC §12.6, issue #43)
 # ---------------------------------------------------------------------------
-# Срок хранения данных оценок (месяцы). TODO(#43): уточнить у заказчика.
-DATA_RETENTION_MONTHS: int = int(os.environ.get("DATA_RETENTION_MONTHS", "60"))
+# Каноническая настройка — годы. DATA_RETENTION_MONTHS временно поддерживается
+# для совместимости с окружениями, созданными до решения по issue #43.
+_retention_years = os.environ.get("DATA_RETENTION_YEARS")
+if _retention_years is None:
+    _retention_months = int(os.environ.get("DATA_RETENTION_MONTHS", "60"))
+    if _retention_months <= 0 or _retention_months % 12 != 0:
+        raise ImproperlyConfigured("DATA_RETENTION_MONTHS должен задавать целое число лет")
+    DATA_RETENTION_YEARS: int = _retention_months // 12
+else:
+    DATA_RETENTION_YEARS = int(_retention_years)
+    if DATA_RETENTION_YEARS <= 0:
+        raise ImproperlyConfigured("DATA_RETENTION_YEARS должен быть положительным")
+
+ASSESSMENT_AGGREGATE_RETENTION_MODE: str = os.environ.get(
+    "ASSESSMENT_AGGREGATE_RETENTION_MODE", "archive"
+).lower()
+if ASSESSMENT_AGGREGATE_RETENTION_MODE not in {"archive", "delete"}:
+    raise ImproperlyConfigured("ASSESSMENT_AGGREGATE_RETENTION_MODE должен быть archive или delete")
+
 AUDIT_LOG_RETENTION_MONTHS: int = int(os.environ.get("AUDIT_LOG_RETENTION_MONTHS", "72"))

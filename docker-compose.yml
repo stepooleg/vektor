@@ -53,6 +53,46 @@ services:
         condition: service_healthy
     expose: ["8000"]
 
+  celery-worker:
+    build:
+      context: .
+      dockerfile: docker/backend/Dockerfile
+    restart: unless-stopped
+    command: ["celery", "-A", "vektor", "worker", "--loglevel=INFO"]
+    env_file: .env
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER:-vektor}:${POSTGRES_PASSWORD:-change-me}@db:5432/${POSTGRES_DB:-vektor}
+      CELERY_BROKER_URL: redis://redis:6379/1
+      CELERY_RESULT_BACKEND: redis://redis:6379/2
+      DJANGO_SETTINGS_MODULE: vektor.settings.dev
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      disable: true
+
+  celery-beat:
+    build:
+      context: .
+      dockerfile: docker/backend/Dockerfile
+    restart: unless-stopped
+    command: ["celery", "-A", "vektor", "beat", "--loglevel=INFO"]
+    env_file: .env
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER:-vektor}:${POSTGRES_PASSWORD:-change-me}@db:5432/${POSTGRES_DB:-vektor}
+      CELERY_BROKER_URL: redis://redis:6379/1
+      CELERY_RESULT_BACKEND: redis://redis:6379/2
+      DJANGO_SETTINGS_MODULE: vektor.settings.dev
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      disable: true
+
   frontend:
     build:
       context: .

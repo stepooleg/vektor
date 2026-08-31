@@ -84,7 +84,12 @@ def test_aggregate_has_no_raw_scores() -> None:
     aggregate = aggregate_cycle(cycle)
 
     # В результате нет ссылок на конкретные assignment_id/score отдельных оценщиков.
-    assert all(g.mean_score > 0 for g in aggregate.groups if g.participants_count > 0)
+    assert all(
+        g.mean_score > 0
+        for g in aggregate.groups
+        if g.participants_count > 0 and not g.hidden_by_threshold
+    )
+    assert all(g.mean_score == 0 for g in aggregate.groups if g.hidden_by_threshold)
     # Никаких сырых объектов AssessmentResponse в агрегате нет (по типу данных).
     for g in aggregate.groups:
         assert not hasattr(g, "responses")

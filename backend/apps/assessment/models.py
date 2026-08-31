@@ -269,6 +269,32 @@ class AssessmentComment(models.Model):
         return f"Комментарий: {snippet}"
 
 
+class AssessmentAggregateArchive(models.Model):
+    """Неизменяемый обезличенный снимок агрегата закрытого цикла.
+
+    Снимок создаётся непосредственно перед удалением сырых ответов по политике
+    хранения. ``payload`` повторяет публичный контракт ``CycleAggregate`` и не
+    содержит идентификаторов оценщиков, ответов или текстовых комментариев.
+    """
+
+    cycle = models.OneToOneField(
+        AssessmentCycle,
+        on_delete=models.CASCADE,
+        related_name="aggregate_archive",
+        verbose_name=_("Цикл оценки"),
+    )
+    payload = models.JSONField(_("Обезличенный агрегат"))
+    archived_at = models.DateTimeField(_("Архивирован"), auto_now_add=True)
+
+    class Meta:
+        verbose_name = _("Архив агрегата оценки")
+        verbose_name_plural = _("Архивы агрегатов оценки")
+
+    def __str__(self) -> str:
+        """Безопасное представление без содержимого агрегата."""
+        return f"Архив агрегата цикла {self.cycle_id}"
+
+
 # ===========================================================================
 # MBO / OKR — целеполагание (SPEC v1.1 §16.4, issue #37)
 # ===========================================================================
