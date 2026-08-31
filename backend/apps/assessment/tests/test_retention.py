@@ -8,6 +8,8 @@ from typing import Any
 
 import pytest
 from django.utils import timezone
+from rest_framework import status
+from rest_framework.test import APIClient
 
 from apps.assessment.models import (
     AssessmentAggregateArchive,
@@ -22,11 +24,13 @@ from apps.assessment.tasks import run_assessment_retention
 from apps.audit.models import AuditLogEntry
 from apps.competencies.models import Competency, CompetencyGroup, Scale
 from apps.orgstructure.models import Department, Employee, Position
-from apps.users.models import User
+from apps.users.models import Role, User
 
 
-def _make_closed_cycle(*, name: str) -> tuple[AssessmentCycle, AssessmentResponse]:
-    """Создать закрытый цикл с одной оценкой и текстовым комментарием."""
+def _make_cycle(
+    *, name: str, status_value: str = AssessmentCycle.Status.CLOSED
+) -> tuple[AssessmentCycle, AssessmentResponse]:
+    """Создать цикл с одной оценкой и текстовым комментарием."""
     department = Department.objects.create(code_1c=f"D-{name}", name=f"Отдел {name}")
     position = Position.objects.create(code_1c=f"P-{name}", name=f"Должность {name}")
     employee_user = User.objects.create_user(
@@ -56,7 +60,7 @@ def _make_closed_cycle(*, name: str) -> tuple[AssessmentCycle, AssessmentRespons
     competency = Competency.objects.create(name=f"Компетенция {name}", group=group, scale=scale)
     cycle = AssessmentCycle.objects.create(
         name=name,
-        status=AssessmentCycle.Status.CLOSED,
+        status=status_value,
         anonymity_threshold=3,
     )
     participant = Participant.objects.create(cycle=cycle, employee=employee)
@@ -81,17 +85,24 @@ def _make_closed_cycle(*, name: str) -> tuple[AssessmentCycle, AssessmentRespons
     return cycle, response
 
 
+def _set_raw_created_at(cycle: AssessmentCycle, value: datetime) -> None:
+    """Установить детерминированное время сырья для проверки границы срока."""
+    AssessmentResponse.objects.filter(assignment__cycle=cycle).update(created_at=value)
+    AssessmentComment.objects.filter(assignment__cycle=cycle).update(created_at=value)
+
+
 @pytest.mark.django_db
 def test_retention_archives_aggregate_and_deletes_only_cycles_older_than_boundary() -> None:
     """Старое сырьё удаляется, а обезличенный агрегат остаётся доступен."""
     now = datetime(2031, 8, 31, 12, tzinfo=timezone.get_current_timezone())
     cutoff = now.replace(year=2026)
-    expired_cycle, expired_response = _make_closed_cycle(name="expired")
-    boundary_cycle, boundary_response = _make_closed_cycle(name="boundary")
-    AssessmentCycle.objects.filter(pk=expired_cycle.pk).update(
-        updated_at=cutoff - timedelta(microseconds=1)
+    expired_cycle, expired_response = _make_cycle(
+        name="expired",
+        status_value=AssessmentCycle.Status.IN_PROGRESS,
     )
-    AssessmentCycle.objects.filter(pk=boundary_cycle.pk).update(updated_at=cutoff)
+    boundary_cycle, boundary_response = _make_cycle(name="boundary")
+    _set_raw_created_at(expired_cycle, cutoff - timedelta(microseconds=1))
+    _set_raw_created_at(boundary_cycle, cutoff)
     expected_archive = asdict(aggregate_cycle(expired_cycle))
 
     result = apply_assessment_retention(
@@ -111,7 +122,9 @@ def test_retention_archives_aggregate_and_deletes_only_cycles_older_than_boundar
     assert archive.payload == expected_archive
     assert "reviewer" not in str(archive.payload)
     assert "comment" not in str(archive.payload)
-    assert aggregate_cycle(expired_cycle).groups[0].mean_score == 5.0
+    archived_group = aggregate_cycle(expired_cycle).groups[0]
+    assert archived_group.hidden_by_threshold is True
+    assert archived_group.mean_score == 0.0
 
     audit = AuditLogEntry.objects.get(action="assessment.retention.run")
     assert audit.actor is None
@@ -129,10 +142,8 @@ def test_retention_archives_aggregate_and_deletes_only_cycles_older_than_boundar
 def test_retention_delete_mode_is_idempotent() -> None:
     """Режим delete не сохраняет агрегат, повторный запуск ничего не удаляет."""
     now = datetime(2031, 8, 31, 12, tzinfo=timezone.get_current_timezone())
-    cycle, _ = _make_closed_cycle(name="delete")
-    AssessmentCycle.objects.filter(pk=cycle.pk).update(
-        updated_at=now.replace(year=2026) - timedelta(seconds=1)
-    )
+    cycle, _ = _make_cycle(name="delete")
+    _set_raw_created_at(cycle, now.replace(year=2026) - timedelta(seconds=1))
 
     first = apply_assessment_retention(
         now=now,
@@ -160,10 +171,8 @@ def test_retention_task_uses_deployment_settings(settings: Any) -> None:
     """Celery-задача получает срок и судьбу агрегатов из настроек deployment."""
     settings.DATA_RETENTION_YEARS = 7
     settings.ASSESSMENT_AGGREGATE_RETENTION_MODE = "delete"
-    cycle, _ = _make_closed_cycle(name="task")
-    AssessmentCycle.objects.filter(pk=cycle.pk).update(
-        updated_at=timezone.now().replace(year=timezone.now().year - 8)
-    )
+    cycle, _ = _make_cycle(name="task")
+    _set_raw_created_at(cycle, timezone.now().replace(year=timezone.now().year - 8))
 
     result = run_assessment_retention()
 
@@ -179,10 +188,8 @@ def test_retention_task_uses_deployment_settings(settings: Any) -> None:
 @pytest.mark.django_db
 def test_retention_rejects_unknown_aggregate_mode_without_deleting_data() -> None:
     """Ошибка конфигурации останавливает очистку до любых удалений."""
-    cycle, response = _make_closed_cycle(name="invalid")
-    AssessmentCycle.objects.filter(pk=cycle.pk).update(
-        updated_at=timezone.now().replace(year=timezone.now().year - 6)
-    )
+    cycle, response = _make_cycle(name="invalid")
+    _set_raw_created_at(cycle, timezone.now().replace(year=timezone.now().year - 6))
 
     with pytest.raises(ValueError, match="aggregate_mode"):
         apply_assessment_retention(
@@ -192,3 +199,24 @@ def test_retention_rejects_unknown_aggregate_mode_without_deleting_data() -> Non
         )
 
     assert AssessmentResponse.objects.filter(pk=response.pk).exists()
+
+
+@pytest.mark.django_db
+def test_employee_cannot_access_archived_aggregate() -> None:
+    """Архивный агрегат сохраняет те же ограничения доступа, что и живой."""
+    cycle, _ = _make_cycle(name="permissions")
+    _set_raw_created_at(cycle, timezone.now().replace(year=timezone.now().year - 6))
+    apply_assessment_retention(
+        now=timezone.now(),
+        retention_years=5,
+        aggregate_mode="archive",
+    )
+    user = User.objects.create_user(email="unauthorized@corp.local", password="Strong-Pwd-1")
+    role = Role.objects.create(code=Role.Code.EMPLOYEE, name="Сотрудник")
+    user.roles.add(role)
+    client = APIClient()
+    client.force_authenticate(user=user)
+
+    response = client.get(f"/api/v1/assessment/cycles/{cycle.pk}/results/")
+
+    assert response.status_code == status.HTTP_403_FORBIDDEN

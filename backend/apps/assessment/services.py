@@ -15,7 +15,7 @@ from datetime import date, datetime
 from typing import TYPE_CHECKING, NotRequired, TypedDict, cast
 
 from django.db import transaction
-from django.db.models import Q, QuerySet
+from django.db.models import QuerySet
 from django.utils import timezone
 
 from apps.competencies.models import CompetencyFramework
@@ -410,8 +410,9 @@ def apply_assessment_retention(
 ) -> AssessmentRetentionResult:
     """Удалить сырьё закрытых циклов старше срока и обработать агрегаты.
 
-    Граница считается от последнего изменения закрытого цикла. Цикл ровно на
-    границе срока сохраняется до следующего запуска. Операция идемпотентна.
+    Граница считается отдельно от неизменяемого ``created_at`` каждого сырого
+    объекта. Объект ровно на границе срока сохраняется до следующего запуска.
+    Операция не зависит от статуса цикла и идемпотентна.
     """
     if retention_years <= 0:
         msg = "retention_years должен быть положительным"
@@ -421,31 +422,45 @@ def apply_assessment_retention(
         raise ValueError(msg)
 
     cutoff = _subtract_years(now, retention_years)
+    expired_response_cycles = AssessmentResponse.objects.filter(created_at__lt=cutoff).values_list(
+        "assignment__cycle_id", flat=True
+    )
+    expired_comment_cycles = AssessmentComment.objects.filter(created_at__lt=cutoff).values_list(
+        "assignment__cycle_id", flat=True
+    )
+    cycle_ids = set(expired_response_cycles).union(expired_comment_cycles)
     cycles = list(
-        AssessmentCycle.objects.filter(
-            Q(reviewer_assignments__responses__isnull=False)
-            | Q(reviewer_assignments__comments__isnull=False),
-            status=AssessmentCycle.Status.CLOSED,
-            updated_at__lt=cutoff,
-        ).distinct()
+        AssessmentCycle.objects.select_for_update().filter(id__in=cycle_ids).order_by("id")
     )
 
     responses_deleted = 0
     comments_deleted = 0
     archives_created = 0
     for cycle in cycles:
-        if aggregate_mode == "archive":
+        has_unexpired_raw_data = (
+            AssessmentResponse.objects.filter(
+                assignment__cycle=cycle, created_at__gte=cutoff
+            ).exists()
+            or AssessmentComment.objects.filter(
+                assignment__cycle=cycle, created_at__gte=cutoff
+            ).exists()
+        )
+        if aggregate_mode == "archive" and not has_unexpired_raw_data:
             aggregate = aggregate_cycle(cycle)
             _, created = AssessmentAggregateArchive.objects.get_or_create(
                 cycle=cycle,
                 defaults={"payload": asdict(aggregate)},
             )
             archives_created += int(created)
-        else:
+        elif aggregate_mode == "delete":
             AssessmentAggregateArchive.objects.filter(cycle=cycle).delete()
 
-        response_query = AssessmentResponse.objects.filter(assignment__cycle=cycle)
-        comment_query = AssessmentComment.objects.filter(assignment__cycle=cycle)
+        response_query = AssessmentResponse.objects.filter(
+            assignment__cycle=cycle, created_at__lt=cutoff
+        )
+        comment_query = AssessmentComment.objects.filter(
+            assignment__cycle=cycle, created_at__lt=cutoff
+        )
         responses_deleted += response_query.count()
         comments_deleted += comment_query.count()
         response_query.delete()
@@ -486,12 +501,14 @@ def _aggregate_group(cycle: AssessmentCycle, group_code: str, threshold: int) ->
     )
     mean_score = sum(scores) / len(scores) if scores else 0.0
 
+    hidden_by_threshold = (
+        participants_count < threshold and group_code != ReviewerAssignment.Group.SELF.value
+    )
     return GroupAggregate(
         group=group_code,
         participants_count=participants_count,
-        mean_score=round(mean_score, 2),
-        hidden_by_threshold=participants_count < threshold
-        and group_code != ReviewerAssignment.Group.SELF.value,
+        mean_score=0.0 if hidden_by_threshold else round(mean_score, 2),
+        hidden_by_threshold=hidden_by_threshold,
     )
 
 
