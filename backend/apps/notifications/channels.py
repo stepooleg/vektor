@@ -3,8 +3,8 @@
 Абстракция ``NotificationChannel`` (Protocol), ``EmailChannel`` (SMTP) и
 ``PushChannel`` (Web Push + VAPID, SPEC §10.4).
 
-needs-spec (#44, SPEC §17 п.4): SMTP-сервер/домен уточняются; реализация
-читает конфигурацию из settings (EMAIL_HOST и т.д.), канал-агностична.
+SMTP-сервер и реквизиты являются параметрами конкретной установки; реализация
+читает их из settings и не привязана к инфраструктуре клиента (issue #44).
 """
 
 from __future__ import annotations
