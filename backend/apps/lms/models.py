@@ -278,7 +278,11 @@ class Submission(models.Model):
         verbose_name=_("Сотрудник"),
     )
     answer_text = models.TextField(_("Текст ответа"), blank=True)
-    # TODO(#21): прикрепление файла (FileField + storage) — добавить при UI.
+    attachment = models.FileField(
+        _("Файл ответа"),
+        upload_to="lms/submissions/%Y/%m/",
+        blank=True,
+    )
     status = models.CharField(
         _("Статус"),
         max_length=16,
