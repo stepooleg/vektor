@@ -11,11 +11,14 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
+from django.http import FileResponse
 from django.shortcuts import get_object_or_404
 from django_filters import rest_framework as filters
-from rest_framework import status, viewsets
+from rest_framework import mixins, status, viewsets
 from rest_framework.decorators import action
-from rest_framework.exceptions import NotFound, ValidationError
+from rest_framework.exceptions import NotFound, PermissionDenied, ValidationError
 from rest_framework.filters import OrderingFilter, SearchFilter
 from rest_framework.request import Request
 from rest_framework.response import Response
@@ -24,9 +27,25 @@ from apps.orgstructure.models import Employee
 from apps.users.models import Role
 from apps.users.permissions import IsAuthenticatedUser, IsMethodologist
 
-from .models import Category, Course, Enrollment, Lesson, LessonProgress
-from .serializers import CategorySerializer, CourseSerializer, EnrollmentSerializer
-from .services import check_attempt_allowed, grade_quiz, mark_lesson_completed
+from .models import Category, Course, Enrollment, Lesson, LessonProgress, PracticalTask, Submission
+from .serializers import (
+    CategorySerializer,
+    CourseSerializer,
+    EnrollmentSerializer,
+    SubmissionSerializer,
+    TaskReviewSerializer,
+)
+from .services import (
+    ReviewAlreadyCompleted,
+    ReviewNotAllowed,
+    can_review_submission,
+    check_attempt_allowed,
+    get_review_queue,
+    grade_quiz,
+    mark_lesson_completed,
+    review_submission,
+    submit_practical_task,
+)
 
 
 def _current_employee(request: Request) -> Employee:
@@ -189,4 +208,80 @@ class CourseViewSet(viewsets.ModelViewSet[Course]):
                 "result": {"percent": result.percent, "passed": result.passed},
                 "enrollment": EnrollmentSerializer(enrollment).data,
             }
+        )
+
+
+class SubmissionViewSet(mixins.ListModelMixin, viewsets.GenericViewSet[Submission]):
+    """Отправка и просмотр ответов на практические задания."""
+
+    serializer_class = SubmissionSerializer
+    permission_classes = [IsAuthenticatedUser]
+
+    def get_queryset(self):  # type: ignore[no-untyped-def]
+        """Вернуть только ответы текущего сотрудника."""
+        employee = _current_employee(self.request)
+        return Submission.objects.filter(employee=employee).select_related("task")
+
+    def create(self, request: Request) -> Response:
+        """Создать или повторно отправить ответ текущего сотрудника."""
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        task = get_object_or_404(PracticalTask, pk=serializer.validated_data["task"].pk)
+        submission = submit_practical_task(
+            task=task,
+            employee=_current_employee(request),
+            answer_text=serializer.validated_data.get("answer_text", ""),
+            attachment=serializer.validated_data.get("attachment"),
+        )
+        return Response(self.get_serializer(submission).data, status=status.HTTP_201_CREATED)
+
+    @action(detail=False, methods=["get"], url_path="review-queue")
+    def review_queue(self, request: Request) -> Response:
+        """Вернуть очередь, доступную текущему куратору."""
+        queryset = get_review_queue(_current_employee(request)).select_related("task", "employee")
+        page = self.paginate_queryset(queryset)
+        if page is not None:
+            return self.get_paginated_response(self.get_serializer(page, many=True).data)
+        return Response(self.get_serializer(queryset, many=True).data)
+
+    @action(detail=True, methods=["post"])
+    def review(self, request: Request, pk: str | None = None) -> Response:
+        """Сохранить результат проверки разрешённым куратором."""
+        submission = get_object_or_404(
+            Submission.objects.select_related("task__reviewer", "employee__user"),
+            pk=pk,
+        )
+        serializer = TaskReviewSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        try:
+            review = review_submission(
+                submission,
+                reviewer=_current_employee(request),
+                **serializer.validated_data,
+            )
+        except ReviewNotAllowed as error:
+            raise PermissionDenied(str(error)) from error
+        except ReviewAlreadyCompleted as error:
+            raise ValidationError(str(error)) from error
+        return Response(TaskReviewSerializer(review).data)
+
+    @action(detail=True, methods=["get"])
+    def attachment(self, request: Request, pk: str | None = None) -> FileResponse:
+        """Скачать вложение только автору ответа или разрешённому куратору."""
+        submission = get_object_or_404(
+            Submission.objects.select_related("task__reviewer", "employee__user"),
+            pk=pk,
+        )
+        employee = _current_employee(request)
+        if submission.employee_id != employee.id and not can_review_submission(
+            employee, submission
+        ):
+            raise PermissionDenied("Нет доступа к вложению ответа.")
+        if not submission.attachment:
+            raise NotFound("Вложение отсутствует.")
+        submission.attachment.open("rb")
+        return FileResponse(
+            submission.attachment,
+            as_attachment=True,
+            filename=Path(submission.attachment.name).name,
         )

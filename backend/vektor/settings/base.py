@@ -288,6 +288,25 @@ STATIC_URL: str = "/static/"
 STATIC_ROOT: Path = BASE_DIR / "staticfiles"
 MEDIA_URL: str = "/media/"
 MEDIA_ROOT: Path = BASE_DIR / "media"
+LMS_SUBMISSION_MAX_FILE_SIZE: int = int(
+    os.environ.get("LMS_SUBMISSION_MAX_FILE_SIZE", str(10 * 1024 * 1024))
+)
+LMS_SUBMISSION_ALLOWED_CONTENT_TYPES: tuple[str, ...] = tuple(
+    value.strip()
+    for value in os.environ.get(
+        "LMS_SUBMISSION_ALLOWED_CONTENT_TYPES",
+        "application/pdf,text/plain,image/jpeg,image/png,"
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    ).split(",")
+    if value.strip()
+)
+LMS_SUBMISSION_ALLOWED_EXTENSIONS: tuple[str, ...] = tuple(
+    value.strip().lower()
+    for value in os.environ.get(
+        "LMS_SUBMISSION_ALLOWED_EXTENSIONS", ".pdf,.txt,.jpg,.jpeg,.png,.docx"
+    ).split(",")
+    if value.strip()
+)
 
 # ---------------------------------------------------------------------------
 # Безопасность (SPEC §12.2) — прод-настройки; в dev/test ослабляются

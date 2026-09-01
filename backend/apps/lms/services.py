@@ -11,14 +11,16 @@ from __future__ import annotations
 
 import random
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from .models import AnswerOption, Lesson, Question
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
-    from django.db.models import QuerySet
+from django.core.files import File
+from django.db import transaction
+from django.db.models import QuerySet
 
 
 @dataclass(frozen=True)
@@ -102,21 +104,36 @@ class ReviewNotAllowed(Exception):
     """Недостаточно прав для проверки задания."""
 
 
+class ReviewAlreadyCompleted(Exception):
+    """Ответ уже проверен и не допускает повторной оценки."""
+
+
+@transaction.atomic
 def submit_practical_task(
-    *, task: PracticalTask, employee: Employee, answer_text: str
+    *,
+    task: PracticalTask,
+    employee: Employee,
+    answer_text: str,
+    attachment: File[Any] | None = None,
 ) -> Submission:
     """Сотрудник отправляет ответ на задание (SPEC §7.2).
 
     Идемпотентно по (task, employee): обновляет текст, переводит в submitted.
     """
+    defaults: dict[str, object] = {
+        "answer_text": answer_text,
+        "status": Submission.Status.SUBMITTED.value,
+        "reviewed_at": None,
+    }
+    if attachment is not None:
+        defaults["attachment"] = attachment
+    existing = Submission.objects.filter(task=task, employee=employee).first()
+    if existing is not None:
+        TaskReview.objects.filter(submission=existing).delete()
     submission, _ = Submission.objects.update_or_create(
         task=task,
         employee=employee,
-        defaults={
-            "answer_text": answer_text,
-            "status": Submission.Status.SUBMITTED.value,
-            "reviewed_at": None,
-        },
+        defaults=defaults,
     )
     return submission
 
@@ -138,7 +155,7 @@ def get_review_queue(reviewer: Employee) -> QuerySet[Submission]:
     return qs.filter(task__reviewer=reviewer)
 
 
-def _can_review(reviewer: Employee, submission: Submission) -> bool:
+def can_review_submission(reviewer: Employee, submission: Submission) -> bool:
     """Может ли сотрудник проверять эту submission (SPEC §7.2)."""
     user = reviewer.user
     if user.has_any_role(Role.Code.METHODOLOGIST.value, Role.Code.HR.value):
@@ -158,8 +175,10 @@ def review_submission(
 
     Отправляет уведомление сотруднику о результате (SPEC §13.2).
     """
-    if not _can_review(reviewer, submission):
+    if not can_review_submission(reviewer, submission):
         raise ReviewNotAllowed("Только назначенный куратор может проверять задание")
+    if submission.status == Submission.Status.REVIEWED.value:
+        raise ReviewAlreadyCompleted("Ответ уже проверен")
 
     from django.utils import timezone
 
