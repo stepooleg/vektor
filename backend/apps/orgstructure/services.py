@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
+from datetime import datetime
 
 from django.db import transaction
 
@@ -47,7 +48,7 @@ class SyncResult:
 
 
 @transaction.atomic
-def sync_orgstructure(adapter: OneCAdapter) -> SyncResult:
+def sync_orgstructure(adapter: OneCAdapter, *, changed_since: datetime | None = None) -> SyncResult:
     """Синхронизировать оргструктуру из 1С (через адаптер).
 
     Атомарная транзакция: при ошибке все изменения откатываются, данные БД
@@ -55,7 +56,7 @@ def sync_orgstructure(adapter: OneCAdapter) -> SyncResult:
     «полусинхронизированного» состояния).
     """
     result = SyncResult()
-    snapshot = adapter.fetch_snapshot()
+    snapshot = adapter.fetch_snapshot(changed_since=changed_since)
 
     # 1. Подразделения: сначала корневые, затем дочерние (многопроходно).
     dept_by_code: dict[str, Department] = {}
@@ -68,6 +69,7 @@ def sync_orgstructure(adapter: OneCAdapter) -> SyncResult:
 
     # 3. Сотрудники (upsert по code_1c, auto-User).
     emp_by_code: dict[str, Employee] = {}
+    accepted_employee_codes: set[str] = set()
     seen_codes: set[str] = set()
     for emp_dto in snapshot.employees:
         seen_codes.add(emp_dto.code_1c)
@@ -82,22 +84,31 @@ def sync_orgstructure(adapter: OneCAdapter) -> SyncResult:
             logger.warning(msg)
             continue
         manager = emp_by_code.get(emp_dto.manager_code_1c) if emp_dto.manager_code_1c else None
-        emp_by_code[emp_dto.code_1c] = _upsert_employee(
+        employee, accepted = _upsert_employee(
             emp_dto, department=department, position=position, manager=manager, result=result
         )
+        emp_by_code[emp_dto.code_1c] = employee
+        if accepted:
+            accepted_employee_codes.add(emp_dto.code_1c)
 
     # 4. Дозаполняем руководителей вторым проходом (порядок в снимке произвольный).
     for emp_dto in snapshot.employees:
-        if emp_dto.manager_code_1c and emp_dto.manager_code_1c in emp_by_code:
+        if (
+            emp_dto.code_1c in accepted_employee_codes
+            and emp_dto.manager_code_1c
+            and emp_dto.manager_code_1c in emp_by_code
+        ):
             emp = emp_by_code.get(emp_dto.code_1c)
             manager = emp_by_code[emp_dto.manager_code_1c]
             if emp and manager and emp.manager_id != manager.id:
                 emp.manager = manager
                 emp.save(update_fields=["manager"])
 
-    # 5. Архивируем исчезнувших из 1С (SPEC §3.4 — сохраняем историю).
-    missing = Employee.objects.exclude(code_1c__in=seen_codes).filter(is_active=True)
-    result.employees_archived = missing.update(is_active=False)
+    # 5. Архивируем исчезнувших только при полном снимке. Отсутствие записи в
+    # инкрементальной выгрузке означает «не изменялась», а не «уволена».
+    if snapshot.is_full:
+        missing = Employee.objects.exclude(code_1c__in=seen_codes).filter(is_active=True)
+        result.employees_archived = missing.update(is_active=False)
 
     return result
 
@@ -144,8 +155,16 @@ def _upsert_department(
     """Создать или обновить подразделение по code_1c."""
     dept = Department.objects.filter(code_1c=dto.code_1c).first()
     if dept is None:
-        dept = Department.objects.create(code_1c=dto.code_1c, name=dto.name, parent=parent)
+        dept = Department.objects.create(
+            code_1c=dto.code_1c,
+            name=dto.name,
+            parent=parent,
+            source_updated_at=dto.updated_at,
+        )
         result.departments_created += 1
+        return dept
+
+    if _is_stale(dept.source_updated_at, dto.updated_at):
         return dept
 
     changed = False
@@ -154,6 +173,9 @@ def _upsert_department(
         changed = True
     if dept.parent_id != (parent.id if parent else None):
         dept.parent = parent
+        changed = True
+    if dept.source_updated_at != dto.updated_at:
+        dept.source_updated_at = dto.updated_at
         changed = True
     if changed:
         dept.save()
@@ -165,12 +187,25 @@ def _upsert_position(dto: PositionDTO, result: SyncResult) -> Position:
     """Создать или обновить должность по code_1c."""
     pos = Position.objects.filter(code_1c=dto.code_1c).first()
     if pos is None:
-        pos = Position.objects.create(code_1c=dto.code_1c, name=dto.name)
+        pos = Position.objects.create(
+            code_1c=dto.code_1c,
+            name=dto.name,
+            source_updated_at=dto.updated_at,
+        )
         result.positions_created += 1
         return pos
 
+    if _is_stale(pos.source_updated_at, dto.updated_at):
+        return pos
+
+    changed = False
     if pos.name != dto.name:
         pos.name = dto.name
+        changed = True
+    if pos.source_updated_at != dto.updated_at:
+        pos.source_updated_at = dto.updated_at
+        changed = True
+    if changed:
         pos.save()
         result.positions_updated += 1
     return pos
@@ -183,7 +218,7 @@ def _upsert_employee(
     position: Position,
     manager: Employee | None,
     result: SyncResult,
-) -> Employee:
+) -> tuple[Employee, bool]:
     """Создать или обновить сотрудника по code_1c (с auto-User)."""
     emp = Employee.objects.filter(code_1c=dto.code_1c).first()
     if emp is None:
@@ -198,9 +233,14 @@ def _upsert_employee(
             position=position,
             manager=manager,
             hire_date=dto.hire_date,
+            is_active=dto.is_active,
+            source_updated_at=dto.updated_at,
         )
         result.employees_created += 1
-        return emp
+        return emp, True
+
+    if _is_stale(emp.source_updated_at, dto.updated_at):
+        return emp, False
 
     changed_fields: list[str] = []
     if emp.last_name != dto.last_name:
@@ -221,13 +261,21 @@ def _upsert_employee(
     if manager and emp.manager_id != manager.id:
         emp.manager = manager
         changed_fields.append("manager")
-    if not emp.is_active:
-        emp.is_active = True  # возвращён из архива
+    if emp.is_active != dto.is_active:
+        emp.is_active = dto.is_active
         changed_fields.append("is_active")
+    if emp.source_updated_at != dto.updated_at:
+        emp.source_updated_at = dto.updated_at
+        changed_fields.append("source_updated_at")
     if changed_fields:
         emp.save(update_fields=changed_fields)
         result.employees_updated += 1
-    return emp
+    return emp, True
+
+
+def _is_stale(existing: datetime | None, incoming: datetime | None) -> bool:
+    """Проверить, что событие не новее уже применённой версии из 1С."""
+    return existing is not None and (incoming is None or incoming <= existing)
 
 
 def _ensure_user(dto: EmployeeDTO) -> User:

@@ -326,12 +326,40 @@ CELERY_ACCEPT_CONTENT: list[str] = ["json"]
 CELERY_TASK_SERIALIZER: str = "json"
 CELERY_RESULT_SERIALIZER: str = "json"
 CELERY_TIMEZONE: str = TIME_ZONE
+
+# ---------------------------------------------------------------------------
+# Интеграция с 1С:ЗУП (SPEC §10.1, issue #41)
+# ---------------------------------------------------------------------------
+ONEC_SYNC_ENABLED: bool = _env_bool("ONEC_SYNC_ENABLED")
+ONEC_BASE_URL: str = os.environ.get("ONEC_BASE_URL", "")
+ONEC_AUTH_MODE: str = os.environ.get("ONEC_AUTH_MODE", "basic").lower()
+ONEC_USERNAME: str = os.environ.get("ONEC_USERNAME", "")
+ONEC_PASSWORD: str = os.environ.get("ONEC_PASSWORD", "")
+ONEC_OAUTH_TOKEN: str = os.environ.get("ONEC_OAUTH_TOKEN", "")
+ONEC_TIMEOUT_SECONDS: float = float(os.environ.get("ONEC_TIMEOUT_SECONDS", "15"))
+ONEC_SYNC_CRON: str = os.environ.get("ONEC_SYNC_CRON", "0 2 * * *")
+_onec_cron_parts = ONEC_SYNC_CRON.split()
+if len(_onec_cron_parts) != 5:
+    raise ImproperlyConfigured("ONEC_SYNC_CRON должен содержать пять полей cron")
+
 CELERY_BEAT_SCHEDULE: dict[str, dict[str, object]] = {
     "assessment-retention-daily": {
         "task": "assessment.retention_daily",
         "schedule": crontab(hour=3, minute=0),
     },
 }
+if ONEC_SYNC_ENABLED:
+    _minute, _hour, _day_of_month, _month_of_year, _day_of_week = _onec_cron_parts
+    CELERY_BEAT_SCHEDULE["orgstructure-onec-sync"] = {
+        "task": "orgstructure.sync_nightly",
+        "schedule": crontab(
+            minute=_minute,
+            hour=_hour,
+            day_of_month=_day_of_month,
+            month_of_year=_month_of_year,
+            day_of_week=_day_of_week,
+        ),
+    }
 
 # ---------------------------------------------------------------------------
 # Комплаенс (SPEC §12.6, issue #43)

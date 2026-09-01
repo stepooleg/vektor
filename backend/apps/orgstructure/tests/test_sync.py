@@ -11,6 +11,8 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
+
 import pytest
 
 from apps.orgstructure.models import Department, Employee, Position
@@ -30,12 +32,14 @@ def _snapshot(
     departments: list[DepartmentDTO] | None = None,
     positions: list[PositionDTO] | None = None,
     employees: list[EmployeeDTO] | None = None,
+    is_full: bool = True,
 ) -> OrgStructureSnapshot:
     """Собрать снимок оргструктуры."""
     return OrgStructureSnapshot(
         departments=departments or [],
         positions=positions or [],
         employees=employees or [],
+        is_full=is_full,
     )
 
 
@@ -189,6 +193,41 @@ def test_sync_archives_fired_employee(_employee_role: Role) -> None:
 
 
 @pytest.mark.django_db
+def test_incremental_sync_does_not_archive_missing_employees(
+    _employee_role: Role,
+) -> None:
+    """Частичная выгрузка не означает увольнение отсутствующих сотрудников."""
+    departments = [DepartmentDTO(code_1c="D1", name="ИТ")]
+    positions = [PositionDTO(code_1c="P1", name="Разработчик")]
+    initial = _snapshot(
+        departments=departments,
+        positions=positions,
+        employees=[
+            EmployeeDTO(
+                code_1c="E1",
+                email="existing@corp.local",
+                last_name="Иванов",
+                first_name="Иван",
+                department_code_1c="D1",
+                position_code_1c="P1",
+            )
+        ],
+    )
+    sync_orgstructure(FakeOneCAdapter(initial))
+    incremental = _snapshot(
+        departments=departments,
+        positions=positions,
+        employees=[],
+        is_full=False,
+    )
+
+    result = sync_orgstructure(FakeOneCAdapter(incremental))
+
+    assert Employee.objects.get(code_1c="E1").is_active is True
+    assert result.employees_archived == 0
+
+
+@pytest.mark.django_db
 def test_sync_is_idempotent(_employee_role: Role) -> None:
     """Повторная синхронизация того же снимка не создаёт дублей."""
     snapshot = _snapshot(
@@ -214,3 +253,63 @@ def test_sync_is_idempotent(_employee_role: Role) -> None:
     assert result2.employees_updated == 0
     assert Employee.objects.filter(code_1c="E1").count() == 1
     assert Department.objects.filter(code_1c="D1").count() == 1
+
+
+@pytest.mark.django_db
+def test_sync_ignores_stale_employee_update(_employee_role: Role) -> None:
+    """Старый updated_at не перезаписывает более свежую запись с тем же id_1c."""
+    departments = [DepartmentDTO(code_1c="D1", name="ИТ")]
+    positions = [PositionDTO(code_1c="P1", name="Разработчик")]
+    manager = EmployeeDTO(
+        code_1c="E2",
+        email="manager@corp.local",
+        last_name="Руководитель",
+        first_name="Иван",
+        department_code_1c="D1",
+        position_code_1c="P1",
+        updated_at=datetime(2026, 9, 1, 12, tzinfo=UTC),
+    )
+    fresh = EmployeeDTO(
+        code_1c="E1",
+        email="employee@corp.local",
+        last_name="Новая",
+        first_name="Запись",
+        department_code_1c="D1",
+        position_code_1c="P1",
+        updated_at=datetime(2026, 9, 1, 12, tzinfo=UTC),
+    )
+    stale = EmployeeDTO(
+        code_1c="E1",
+        email="employee@corp.local",
+        last_name="Старая",
+        first_name="Запись",
+        department_code_1c="D1",
+        position_code_1c="P1",
+        manager_code_1c="E2",
+        updated_at=datetime(2026, 8, 31, 12, tzinfo=UTC),
+    )
+    sync_orgstructure(
+        FakeOneCAdapter(
+            _snapshot(
+                departments=departments,
+                positions=positions,
+                employees=[manager, fresh],
+            )
+        )
+    )
+
+    result = sync_orgstructure(
+        FakeOneCAdapter(
+            _snapshot(
+                departments=departments,
+                positions=positions,
+                employees=[manager, stale],
+            )
+        )
+    )
+
+    employee = Employee.objects.get(code_1c="E1")
+    assert employee.last_name == "Новая"
+    assert employee.manager is None
+    assert employee.source_updated_at == fresh.updated_at
+    assert result.employees_updated == 0

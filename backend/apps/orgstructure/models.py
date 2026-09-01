@@ -54,6 +54,7 @@ class Department(models.Model):
         verbose_name=_("Руководитель подразделения"),
     )
     is_active = models.BooleanField(_("Активно"), default=True)
+    source_updated_at = models.DateTimeField(_("Изменено в 1С"), null=True, blank=True)
 
     class Meta:
         verbose_name = _("Подразделение")
@@ -75,6 +76,7 @@ class Position(models.Model):
         unique=True,
         help_text=_("Стабильный идентификатор для синхронизации с 1С."),
     )
+    source_updated_at = models.DateTimeField(_("Изменено в 1С"), null=True, blank=True)
 
     class Meta:
         verbose_name = _("Должность")
@@ -84,6 +86,18 @@ class Position(models.Model):
     def __str__(self) -> str:
         """Название должности."""
         return self.name
+
+
+class OneCSyncState(models.Model):
+    """Cursor последней успешной pull-синхронизации с 1С:ЗУП."""
+
+    last_successful_at = models.DateTimeField(
+        _("Последняя успешная синхронизация"), null=True, blank=True
+    )
+
+    def __str__(self) -> str:
+        """Текущий cursor синхронизации для диагностики."""
+        return self.last_successful_at.isoformat() if self.last_successful_at else "не запускалась"
 
 
 class Employee(models.Model):
@@ -142,6 +156,7 @@ class Employee(models.Model):
         _("Участвует в оценке"),
         default=True,
     )
+    source_updated_at = models.DateTimeField(_("Изменено в 1С"), null=True, blank=True)
 
     class Meta:
         verbose_name = _("Сотрудник")
