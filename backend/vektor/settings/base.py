@@ -8,13 +8,14 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 import dj_database_url
 from celery.schedules import crontab
 from django.core.exceptions import ImproperlyConfigured
 from dotenv import load_dotenv
 
+from apps.notifications.smtp_config import build_smtp_settings
 from apps.users.ldap_config import parse_group_role_map, validate_secure_transport
 
 if TYPE_CHECKING:
@@ -249,6 +250,20 @@ CACHES = {
         "LOCATION": "vektor-default",
     }
 }
+
+# ---------------------------------------------------------------------------
+# Email (SMTP, SPEC §10.3) — только deployment-конфигурация
+# ---------------------------------------------------------------------------
+_smtp = build_smtp_settings(os.environ)
+EMAIL_BACKEND: str = cast(str, _smtp["EMAIL_BACKEND"])
+EMAIL_HOST: str = cast(str, _smtp["EMAIL_HOST"])
+EMAIL_PORT: int = cast(int, _smtp["EMAIL_PORT"])
+EMAIL_USE_TLS: bool = cast(bool, _smtp["EMAIL_USE_TLS"])
+EMAIL_USE_SSL: bool = cast(bool, _smtp["EMAIL_USE_SSL"])
+EMAIL_HOST_USER: str = cast(str, _smtp["EMAIL_HOST_USER"])
+EMAIL_HOST_PASSWORD: str = cast(str, _smtp["EMAIL_HOST_PASSWORD"])
+DEFAULT_FROM_EMAIL: str = cast(str, _smtp["DEFAULT_FROM_EMAIL"])
+EMAIL_TIMEOUT: float = cast(float, _smtp["EMAIL_TIMEOUT"])
 
 # ---------------------------------------------------------------------------
 # Web Push (PWA, SPEC §10.4) — VAPID-ключи

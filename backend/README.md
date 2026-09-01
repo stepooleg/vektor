@@ -67,6 +67,30 @@ docker compose exec backend python manage.py verify_ldap <sAMAccountName-или-
 bind пользователя и синхронизацию профиля. Эти значения являются параметрами установки,
 а не условием готовности продукта до появления конкретного клиента.
 
+## SMTP без клиентского сервера
+
+Адрес SMTP, учётные данные и доверенный CA являются параметрами установки и не нужны для
+локальной разработки или CI. Автономные тесты проверяют разбор конфигурации, запрет
+незащищённого удалённого SMTP и отправку через стандартный Django mail backend:
+
+```bash
+uv run pytest apps/notifications/tests -q
+```
+
+Поддерживаются STARTTLS и implicit SSL. `EMAIL_HOST_USER` и `EMAIL_HOST_PASSWORD` можно
+оставить пустыми только вместе — для внутреннего relay, доверяющего IP приложения.
+Plaintext SMTP допускается лишь на loopback для локального Mailpit/MailHog.
+
+После заполнения `EMAIL_*` из `.env.example` администратор проверяет реальную доставку на
+технический адрес клиента:
+
+```bash
+docker compose exec backend python manage.py verify_smtp recipient@example.test
+```
+
+Команда не выводит адрес, credentials или содержимое конфигурации. На площадке отдельно
+проверяются маршрут, TLS/CA, политика relay и попадание письма в целевой почтовый ящик.
+
 ## 1С:ЗУП без клиентского стенда
 
 До выбора площадки `ONEC_SYNC_ENABLED=False`: задача Celery завершается без обращения к
